@@ -7,7 +7,7 @@
 [![Версия](https://img.shields.io/badge/версия-1.0.0-B1C4E6)](../../releases/latest)
 [![Платформа](https://img.shields.io/badge/Android-7.0%2B-3DDC84)](../../releases/latest)
 
-[**⬇️ Скачать**](../../releases/latest) · [Канал проектов](https://t.me/th3nek1t_projects) · [Поддержка](https://t.me/th3_nek1t) · [Поддержать ₽](https://new.donatepay.ru/@1472897) · [Boosty](https://boosty.to/th3nekit)
+[**⬇️ Скачать**](../../releases/latest) · [Канал проектов](https://t.me/th3nek1t_projects) · [Поддержка](https://t.me/th3_nek1t) · [Boosty](https://boosty.to/th3nekit)
 
 <p>
   <img src="docs/img/home.jpg" width="200" alt="Главный экран">
@@ -57,7 +57,7 @@ Lean — лёгкий VPN-клиент для Android с упором на ск�
 Вопросы и обратная связь — [@th3_nek1t](https://t.me/th3_nek1t).
 Новости и сборки — [@th3nek1t_projects](https://t.me/th3nek1t_projects).
 
-Lean бесплатный, без рекламы. Поддержать разработку — [donatepay.ru/@1472897](https://new.donatepay.ru/@1472897) или [Boosty](https://boosty.to/th3nekit).
+Lean бесплатный, без рекламы. Поддержать разработку — [Boosty](https://boosty.to/th3nekit).
 
 ## Лицензия
 
