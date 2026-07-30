@@ -4,10 +4,10 @@
 
 **Быстрый VPN-клиент для Android. Обход блокировок без лишнего.**
 
-[![Версия](https://img.shields.io/badge/версия-0.9.4--beta-B1C4E6)](../../releases/latest)
+[![Версия](https://img.shields.io/badge/версия-1.0.0-B1C4E6)](../../releases/latest)
 [![Платформа](https://img.shields.io/badge/Android-7.0%2B-3DDC84)](../../releases/latest)
 
-[**⬇️ Скачать**](../../releases/latest) · [Канал проектов](https://t.me/th3nek1t_projects) · [Поддержка](https://t.me/th3_nek1t) · [Поддержать ₽](https://new.donatepay.ru/@1472897)
+[**⬇️ Скачать**](../../releases/latest) · [Канал проектов](https://t.me/th3nek1t_projects) · [Поддержка](https://t.me/th3_nek1t) · [Поддержать ₽](https://new.donatepay.ru/@1472897) · [Boosty](https://boosty.to/th3nekit)
 
 <p>
   <img src="docs/img/home.jpg" width="200" alt="Главный экран">
@@ -28,8 +28,9 @@ Lean — лёгкий VPN-клиент для Android с упором на ск�
 ## Возможности
 
 - **Протоколы:** VLESS/Reality, VMess, Trojan, Shadowsocks, Hysteria2, TUIC, WireGuard, **AmneziaWG** (обход DPI).
+- **Оформление** — готовые образы (в т.ч. AMOLED, светлая, плотный «терминальный» стиль), свой цвет акцента из обоев, шрифты, скругления, плотность интерфейса; всё меняется вживую с предпросмотром. До 10 своих образов — сохранить, назвать, вернуть одним тапом или поделиться строкой-кодом.
 - **Подписки** и share-ссылки, импорт `.conf`, deep-link `lean://`.
-- **Темы** — тёмная / светлая / AMOLED, выбор цвета акцента, русский и английский.
+- **Темы** — тёмная / светлая / AMOLED / системная, автопереключение на тёмную по расписанию, русский и английский.
 - **Плитка** быстрых настроек, авто-выбор быстрейшего сервера, проверка пинга и сортировка.
 - **Раздельный туннель** по приложениям, kill-switch, выбор DNS, обход локальной сети.
 - **Маршрутизация** — режим «российские сайты напрямую» и свои rule-set'ы geoip/geosite.
@@ -41,10 +42,10 @@ Lean — лёгкий VPN-клиент для Android с упором на ск�
 
 | Архитектура | Для кого | APK |
 |---|---|---|
-| **arm64-v8a** | большинство современных телефонов | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v0.9.4-beta/lean-0.9.4-arm64-v8a.apk) |
-| armeabi-v7a | старые 32-битные устройства | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v0.9.4-beta/lean-0.9.4-armeabi-v7a.apk) |
-| x86_64 | эмуляторы, x86-планшеты | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v0.9.4-beta/lean-0.9.4-x86_64.apk) |
-| универсальный | если не знаешь архитектуру | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v0.9.4-beta/lean-0.9.4-universal.apk) |
+| **arm64-v8a** | большинство современных телефонов | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v1.0.0/lean-1.0.0-arm64-v8a.apk) |
+| armeabi-v7a | старые 32-битные устройства | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v1.0.0/lean-1.0.0-armeabi-v7a.apk) |
+| x86_64 | эмуляторы, x86-планшеты | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v1.0.0/lean-1.0.0-x86_64.apk) |
+| универсальный | если не знаешь архитектуру | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v1.0.0/lean-1.0.0-universal.apk) |
 
 Не уверен — бери **универсальный**. После загрузки разреши установку из неизвестного
 источника, открой APK, импортируй подписку или конфиг и подключайся.
@@ -56,7 +57,7 @@ Lean — лёгкий VPN-клиент для Android с упором на ск�
 Вопросы и обратная связь — [@th3_nek1t](https://t.me/th3_nek1t).
 Новости и сборки — [@th3nek1t_projects](https://t.me/th3nek1t_projects).
 
-Lean бесплатный, без рекламы. Поддержать разработку — [donatepay.ru/@1472897](https://new.donatepay.ru/@1472897).
+Lean бесплатный, без рекламы. Поддержать разработку — [donatepay.ru/@1472897](https://new.donatepay.ru/@1472897) или [Boosty](https://boosty.to/th3nekit).
 
 ## Лицензия
 
