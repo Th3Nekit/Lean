@@ -4,7 +4,7 @@
 
 **Быстрый VPN-клиент для Android. Обход блокировок без лишнего.**
 
-[![Версия](https://img.shields.io/badge/версия-1.0.0-B1C4E6)](../../releases/latest)
+[![Версия](https://img.shields.io/badge/версия-1.0.1-B1C4E6)](../../releases/latest)
 [![Платформа](https://img.shields.io/badge/Android-7.0%2B-3DDC84)](../../releases/latest)
 
 [**⬇️ Скачать**](../../releases/latest) · [Канал проектов](https://t.me/th3nek1t_projects) · [Поддержка](https://t.me/th3_nek1t) · [Boosty](https://boosty.to/th3nekit)
@@ -27,9 +27,9 @@ Lean — лёгкий VPN-клиент для Android с упором на ск�
 
 ## Возможности
 
-- **Протоколы:** VLESS/Reality, VMess, Trojan, Shadowsocks, Hysteria2, TUIC, WireGuard, **AmneziaWG** (обход DPI).
+- **Протоколы:** VLESS/Reality, VMess, Trojan, Shadowsocks, Hysteria2, TUIC, WireGuard, **AmneziaWG** (обход DPI), **NaiveProxy** и **Mieru** (маскировка трафика; Mieru — только arm64).
 - **Оформление** — готовые образы (в т.ч. AMOLED, светлая, плотный «терминальный» стиль), свой цвет акцента из обоев, шрифты, скругления, плотность интерфейса; всё меняется вживую с предпросмотром. До 10 своих образов — сохранить, назвать, вернуть одним тапом или поделиться строкой-кодом.
-- **Подписки** и share-ссылки, импорт `.conf`, deep-link `lean://`.
+- **Подписки** и share-ссылки, импорт конфигов `.conf` / `.json` / `.yaml`, deep-link `lean://`.
 - **Темы** — тёмная / светлая / AMOLED / системная, автопереключение на тёмную по расписанию, русский и английский.
 - **Плитка** быстрых настроек, авто-выбор быстрейшего сервера, проверка пинга и сортировка.
 - **Раздельный туннель** по приложениям, kill-switch, выбор DNS, обход локальной сети.
@@ -42,10 +42,10 @@ Lean — лёгкий VPN-клиент для Android с упором на ск�
 
 | Архитектура | Для кого | APK |
 |---|---|---|
-| **arm64-v8a** | большинство современных телефонов | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v1.0.0/lean-1.0.0-arm64-v8a.apk) |
-| armeabi-v7a | старые 32-битные устройства | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v1.0.0/lean-1.0.0-armeabi-v7a.apk) |
-| x86_64 | эмуляторы, x86-планшеты | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v1.0.0/lean-1.0.0-x86_64.apk) |
-| универсальный | если не знаешь архитектуру | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v1.0.0/lean-1.0.0-universal.apk) |
+| **arm64-v8a** | большинство современных телефонов | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v1.0.1/lean-1.0.1-arm64-v8a.apk) |
+| armeabi-v7a | старые 32-битные устройства | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v1.0.1/lean-1.0.1-armeabi-v7a.apk) |
+| x86_64 | эмуляторы, x86-планшеты | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v1.0.1/lean-1.0.1-x86_64.apk) |
+| универсальный | если не знаешь архитектуру | [скачать](https://github.com/Th3Nekit/Lean/releases/download/v1.0.1/lean-1.0.1-universal.apk) |
 
 Не уверен — бери **универсальный**. После загрузки разреши установку из неизвестного
 источника, открой APK, импортируй подписку или конфиг и подключайся.
