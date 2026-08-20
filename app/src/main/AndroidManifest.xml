@@ -1,0 +1,552 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- requestNetwork() on API 28–30 for best-underlying-network tracking. -->
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Auto-connect after a device reboot (gated by the autoConnect setting). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Lets «Работа в фоне» open the exemption request directly instead of dumping the
+         user in the system battery list. Doze (and the vendor layers above it) will
+         freeze this process despite the foreground service, which reads as the tunnel
+         dropping on its own. Distributed outside Play, where this permission is
+         restricted; a VPN is an allowed use case there in any event. -->
+    <uses-permission
+        android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        tools:ignore="BatteryLife" />
+
+    <!-- Per-app split-tunnel picker: list every installed package holding the
+         INTERNET permission (background/companion apps route traffic without a
+         launcher entry). Personal-use build, not a Play Store release, so the
+         broad QUERY_ALL_PACKAGES visibility permission is acceptable here. -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <!-- Launcher-app visibility kept as belt-and-braces alongside QUERY_ALL_PACKAGES. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <!-- Automation guard: third-party senders (Tasker etc.) declare this
+         normal-level permission to drive AutomationReceiver; it is granted
+         automatically at install. ${applicationId} keeps the debug build
+         (com.th3web.lean.debug) from colliding with release on one device. -->
+    <permission
+        android:name="${applicationId}.permission.AUTOMATION"
+        android:protectionLevel="normal" />
+
+    <application
+        android:name=".LeanApp"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:enableOnBackInvokedCallback="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Lean"
+        tools:targetApi="33">
+
+        <!-- The MAIN/LAUNCHER entry lives on the Icon* activity-aliases BELOW
+             (launcher-icon picker), NOT here: the VPN notification, the QS tile
+             and shortcuts.xml all address .MainActivity EXPLICITLY, so this
+             component must stay permanently enabled — only the aliases flip
+             enabled state (core/AppIcon.kt). -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Lean">
+            <!-- Deep links: lean://connect | lean://disconnect | lean://toggle
+                 (also the launcher shortcuts' route into the app), plus the
+                 subscription-import links handed out in Telegram:
+                   lean://import-sub?url=<enc>&name=<opt>
+                   lean://install-config/?url=<enc>      (Hiddify-style alias)
+                 BROWSABLE is what lets these open from a browser / Telegram tap. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="lean" />
+                <data android:host="connect" />
+                <data android:host="disconnect" />
+                <data android:host="toggle" />
+                <data android:host="import-sub" />
+                <data android:host="install-config" />
+            </intent-filter>
+            <!-- QS tile long-press target: open the app at Home (not Settings).
+                 Android routes a long-press on the tile to this action. -->
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Launcher-icon variants ("Иконка приложения" picker). Exactly ONE
+             alias is enabled at any time — IconDefault from the manifest, the
+             alternates via PackageManager.setComponentEnabledSetting
+             (core/AppIcon.kt enables the new one BEFORE disabling the rest, so
+             the launcher entry never vanishes). Alias names expand against the
+             com.th3web.lean namespace, not the applicationId — keep them in sync
+             with AppIcon.ALIASES. Static launcher shortcuts attach to whichever
+             component carries MAIN/LAUNCHER, hence the shortcuts meta-data is
+             repeated on every alias; the shortcut intents keep targeting
+             .MainActivity (always enabled). -->
+        <activity-alias
+            android:name=".IconDefault"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconOutline"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_outline"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_outline"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconBlack"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_black"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_black"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconAccent"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_accent"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_accent"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconFrost"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_frost"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_frost"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconNeon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_neon"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_neon"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconObsidian"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_obsidian"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_obsidian"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconSunset"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_sunset"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_sunset"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack03"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack03"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack03"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack04"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack04"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack04"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack06"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack06"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack06"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack08"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack08"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack08"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack09"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack09"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack09"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack13"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack13"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack13"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack14"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack14"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack14"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack15"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack15"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack15"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack16"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack16"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack16"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack17"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack17"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack17"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack18"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack18"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack18"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack19"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack19"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack19"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack20"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack20"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack20"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack21"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack21"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack21"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPack23"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pack23"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_pack23"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <!-- External automation (Tasker / MacroDroid / adb). Since Android 8
+             implicit broadcasts are not delivered to manifest receivers, so
+             senders must address the component explicitly, e.g.:
+               adb shell am broadcast \
+                 -n com.th3web.lean/.core.AutomationReceiver \
+                 -a com.th3web.lean.CONNECT
+             Action strings are literals on purpose: the manifest cannot
+             reference Kotlin consts. Keep in sync with core/AutomationReceiver.kt. -->
+        <receiver
+            android:name=".core.AutomationReceiver"
+            android:exported="true"
+            android:permission="${applicationId}.permission.AUTOMATION">
+            <intent-filter>
+                <action android:name="com.th3web.lean.CONNECT" />
+                <action android:name="com.th3web.lean.DISCONNECT" />
+                <action android:name="com.th3web.lean.TOGGLE" />
+                <action android:name="com.th3web.lean.STATUS" />
+            </intent-filter>
+            <!-- Auto-connect after reboot. The system is the broadcaster for
+                 these, so the AUTOMATION android:permission guard above does not
+                 block them (it only constrains third-party senders). The handler
+                 still no-ops unless the autoConnect setting is on. -->
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".core.LeanVpnService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Personal VPN tunnel to the user's own infrastructure" />
+        </service>
+
+        <service
+            android:name=".core.LeanTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_mono_mark"
+            android:label="Lean VPN"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+    </application>
+
+</manifest>

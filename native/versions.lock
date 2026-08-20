@@ -1,0 +1,269 @@
+{
+  "schema": 1,
+  "toolchain": {
+    "coreGo": "1.23.6",
+    "gomobileGo": "1.24.4",
+    "goDistributions": {
+      "1.23.6": {
+        "linux-amd64": {
+          "file": "go1.23.6.linux-amd64.tar.gz",
+          "url": "https://go.dev/dl/go1.23.6.linux-amd64.tar.gz",
+          "sha256": "9379441ea310de000f33a4dc767bd966e72ab2826270e038e78b2c53c2e7802d"
+        },
+        "windows-amd64": {
+          "file": "go1.23.6.windows-amd64.zip",
+          "url": "https://go.dev/dl/go1.23.6.windows-amd64.zip",
+          "sha256": "53fec1586850b2cf5ad6438341ff7adc5f6700dd3ec1cfa3f5e8b141df190243"
+        }
+      },
+      "1.24.4": {
+        "linux-amd64": {
+          "file": "go1.24.4.linux-amd64.tar.gz",
+          "url": "https://go.dev/dl/go1.24.4.linux-amd64.tar.gz",
+          "sha256": "77e5da33bb72aeaef1ba4418b6fe511bc4d041873cbf82e5aa6318740df98717"
+        },
+        "windows-amd64": {
+          "file": "go1.24.4.windows-amd64.zip",
+          "url": "https://go.dev/dl/go1.24.4.windows-amd64.zip",
+          "sha256": "b751a1136cb9d8a2e7ebb22c538c4f02c09b98138c7c8bfb78a54a4566c013b1"
+        }
+      }
+    },
+    "jdkMajor": 17,
+    "ndk": "25.0.8775105",
+    "androidApi": 21,
+    "androidCompileSdk": 35
+  },
+  "build": {
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "tags": [
+      "with_conntrack",
+      "with_gvisor",
+      "with_quic",
+      "with_wireguard",
+      "with_utls",
+      "with_clash_api"
+    ],
+    "gomobileInit": "skip-floating-gobind-install"
+  },
+  "components": {
+    "neko": {
+      "repository": "https://github.com/MatsuriDayo/NekoBoxForAndroid.git",
+      "archive": "https://codeload.github.com/MatsuriDayo/NekoBoxForAndroid/tar.gz/5768494d8ae3c74a057bb6d46c0f8dc071b0d821",
+      "revision": "5768494d8ae3c74a057bb6d46c0f8dc071b0d821",
+      "archiveSha256": "8b7a35d4d884b8b060c883753b2f884db6d7787e782f48ceca216975915feadf"
+    },
+    "singBox": {
+      "repository": "https://github.com/MatsuriDayo/sing-box.git",
+      "archive": "https://codeload.github.com/MatsuriDayo/sing-box/tar.gz/aed32ee3066cdbc7d471e3e0415c5134088962df",
+      "revision": "aed32ee3066cdbc7d471e3e0415c5134088962df",
+      "archiveSha256": "402e02917da475e48062dbaef76265045fcb80831a84158c8b7fd566c32567b5"
+    },
+    "libneko": {
+      "repository": "https://github.com/MatsuriDayo/libneko.git",
+      "archive": "https://codeload.github.com/MatsuriDayo/libneko/tar.gz/1c47a3af71990a7b2192e03292b4d246c308ef0b",
+      "revision": "1c47a3af71990a7b2192e03292b4d246c308ef0b",
+      "archiveSha256": "91b0fcc44bb71b0b61d9c50411ae244550dd66084daaddb550fed9c6280847f7"
+    },
+    "gomobile": {
+      "repository": "https://github.com/MatsuriDayo/gomobile.git",
+      "archive": "https://codeload.github.com/MatsuriDayo/gomobile/tar.gz/17d6af34f6bd6d7e1e428e0c652c8b54a46bda4f",
+      "revision": "17d6af34f6bd6d7e1e428e0c652c8b54a46bda4f",
+      "archiveSha256": "492d77638c5481e61115bd72c73e63b1fe465d674619a420d51bfcaaacdf53ac"
+    }
+  },
+  "moduleFiles": {
+    "neko/libcore/go.mod": "f680ca59b25a691cdbc7c1a6f7cea06d7ea3dbb57421d7fa89b23eaea380a429",
+    "neko/libcore/go.sum": "0e00618b77463b8b1b431049605b48c3bd901abf0447d4f6185e46591ba38889",
+    "libneko/go.mod": "c6c8261ef832c7446d1d33a890d6c6fb04959daa93f5b14bc536ca10d85c1d30",
+    "gomobile/go.mod": "76cf44a207b4cb3594a83d1c6a195abaedeaf0f0645cb93a3b324fb92e3df0b7",
+    "gomobile/go.sum": "7d7d1a6f5f6e4ad0750e0bbaf3c8048f011132e1baff6adf7ef39d32fa5e2d0c"
+  },
+  "patches": {
+    "nekoDnsSuccessCompletion": {
+      "file": "native/neko/patches/neko-dns-success-completion.patch",
+      "sha256": "5d899d46f11183602dc7469aebe9bf235f50ebc8c5ec7ce61a50d15511f4b89f",
+      "target": "libcore/dns_box.go",
+      "targetBeforeSha256": "5bdf5983b526a6bf6efe1b5f88d925eb70d62746ce9706c27754063fc360a8c5",
+      "targetAfterSha256": "1dba67718c229df8eb6d45e8cfd49cfa2f94f883d4201dba4ef28a4e76ec37ec",
+      "regressionTest": {
+        "file": "native/neko/tests/dns_box_success_test.go",
+        "sha256": "8f6aee242d484fddf9ec9bd8f5e06b4ca625efe336621d3954639a3553f1f9d6",
+        "target": "libcore/dns_box_success_test.go"
+      }
+    },
+    "nekoResetNetwork": {
+      "file": "native/neko/patches/neko-reset-network.patch",
+      "sha256": "10889eadd1ed112c4fbffd1991a6a17717f18b2f936e8579773183e18b5b3039",
+      "target": "libcore/box.go",
+      "targetBeforeSha256": "d0ae9e2d6808c8f535f86d7fef882fd1e1b5dddf61f6ba6ca34519116a69f882",
+      "targetAfterSha256": "36cfc4edc1d95558b3aa511e4926355622719e173cce9599d4034ebccfd0f9c6"
+    }
+  },
+  "amneziawg": {
+    "goVersion": "1.24.4",
+    "ndkVersion": "26.1.10909125",
+    "androidApi": 24,
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "goDistributions": {
+      "linux-amd64": {
+        "file": "go1.24.4.linux-amd64.tar.gz",
+        "url": "https://go.dev/dl/go1.24.4.linux-amd64.tar.gz",
+        "sha256": "77e5da33bb72aeaef1ba4418b6fe511bc4d041873cbf82e5aa6318740df98717"
+      },
+      "windows-amd64": {
+        "file": "go1.24.4.windows-amd64.zip",
+        "url": "https://go.dev/dl/go1.24.4.windows-amd64.zip",
+        "sha256": "b751a1136cb9d8a2e7ebb22c538c4f02c09b98138c7c8bfb78a54a4566c013b1"
+      }
+    },
+    "androidSource": {
+      "repository": "https://github.com/amnezia-vpn/amneziawg-android.git",
+      "archive": "https://codeload.github.com/amnezia-vpn/amneziawg-android/tar.gz/4116c836241f737badb99dcd4e990600d46e4c65",
+      "revision": "4116c836241f737badb99dcd4e990600d46e4c65",
+      "archiveSha256": "4e712c32172b41ac03fad22afb67f2cc9ae56cb92ee9245b11c7453570c8ff5d"
+    },
+    "goSource": {
+      "repository": "https://github.com/amnezia-vpn/amneziawg-go.git",
+      "archive": "https://codeload.github.com/amnezia-vpn/amneziawg-go/tar.gz/730d6c39d0c4e348a3d080bebe496664215e5c99",
+      "tag": "v0.2.16",
+      "revision": "730d6c39d0c4e348a3d080bebe496664215e5c99",
+      "archiveSha256": "e26d13e5229f0976353008d78d1359bbdb000c9688b17a1d065ba1f61cbd872a",
+      "module": "github.com/amnezia-vpn/amneziawg-go",
+      "moduleVersion": "v0.2.16",
+      "moduleSum": "h1:XY6HOq/xtqH8ZXMncRWkjFs85EKdN10NLNnw23kTpE0="
+    },
+    "glueFiles": {
+      "api-android.go": "1d3e5047f2fcd29511b19f742b4e9365df324117623193650ae728fd7e489570",
+      "jni.c": "640682de14205ad1b9b1909bd04c0a4c449cf59ffe2e6c7f45c57a9c3a827edd",
+      "go.mod": "823046bdf938d46dab10fa3a54bd32f2815adff1868288d3fe91dce8827498e4",
+      "go.sum": "74d8541e14dd81b8bb9607e977bd7f165f8f339a2df6a01428649ccaa7764571"
+    },
+    "patch": {
+      "file": "native/amneziawg/patches/direct-jni-only.patch",
+      "sha256": "a1654e47a968ac89437d1c54089a15e8ee8a1f7b4c3a7d40c789cfcd0ec5db1e",
+      "target": "api-android.go",
+      "patchedSha256": "7073da9521d5d32da37a20890e9ab69946bb22ef87a39491e96845926f066244"
+    },
+    "outputs": {
+      "libraryName": "libwg-go.so",
+      "soname": "libwg-go.so",
+      "jniOwner": "org.amnezia.awg.GoBackend"
+    }
+  },
+  "plugins": {
+    "naive": {
+      "version": "150.0.7871.63-1",
+      "license": "BSD-3-Clause",
+      "soName": "libnaive.so",
+      "entryInApk": "lib/%(abi)s/libnaive.so",
+      "abis": {
+        "armeabi-v7a": {
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v150.0.7871.63-1/naiveproxy-plugin-v150.0.7871.63-1-armeabi-v7a.apk",
+          "sha256": "d52b01d0a55cd0807fe196e72abd5aa4859a783798b1bc1b3cf1bfa9ad8f7ae4"
+        },
+        "arm64-v8a": {
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v150.0.7871.63-1/naiveproxy-plugin-v150.0.7871.63-1-arm64-v8a.apk",
+          "sha256": "733fbbbebb383a91f42036992c21cfd19b99e089ac3d15d7c077df79fc471a89"
+        },
+        "x86": {
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v150.0.7871.63-1/naiveproxy-plugin-v150.0.7871.63-1-x86.apk",
+          "sha256": "101d8e52c7473005b8ad072b7d446db624c76ba77ccce116564fadcc2cd4e0d7"
+        },
+        "x86_64": {
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v150.0.7871.63-1/naiveproxy-plugin-v150.0.7871.63-1-x86_64.apk",
+          "sha256": "a6800d30bb70798d7b9ad3d0218469c58776c250b462926a7cc2e7795d915f78"
+        }
+      }
+    },
+    "mieru": {
+      "version": "3.35.0",
+      "license": "GPL-3.0",
+      "soName": "libmieru.so",
+      "entryInArchive": "mieru",
+      "abis": {
+        "arm64-v8a": {
+          "url": "https://github.com/enfein/mieru/releases/download/v3.35.0/mieru_3.35.0_android_arm64.tar.gz",
+          "sha256": "53fd6a482122f964125434a7982583dc264a98e322b12882ec6a0c8fe632c3ad"
+        }
+      },
+      "source": {
+        "repository": "https://github.com/enfein/mieru",
+        "tag": "v3.35.0",
+        "archive": "https://codeload.github.com/enfein/mieru/tar.gz/refs/tags/v3.35.0",
+        "archiveSha256": "d8e1bf819290d55fad817f6c244de9ff326b61b778673084c98f90a970988a28",
+        "package": "./cmd/mieru",
+        "go": {
+          "version": "1.26.3",
+          "linuxAmd64": {
+            "file": "go1.26.3.linux-amd64.tar.gz",
+            "url": "https://go.dev/dl/go1.26.3.linux-amd64.tar.gz",
+            "sha256": "2b2cfc7148493da5e73981bffbf3353af381d5f93e789c82c79aff64962eb556"
+          }
+        }
+      }
+    },
+    "xray": {
+      "version": "26.3.27",
+      "license": "MPL-2.0",
+      "soName": "libxray.so",
+      "entryInArchive": "xray",
+      "abis": {
+        "arm64-v8a": {
+          "url": "https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-android-arm64-v8a.zip",
+          "sha256": "57149ffd48b629c07bf76938e73ab2729fde5910091497eab3e93d1c190f4c1b"
+        }
+      },
+      "source": {
+        "repository": "https://github.com/XTLS/Xray-core",
+        "tag": "v26.3.27",
+        "archive": "https://codeload.github.com/XTLS/Xray-core/tar.gz/refs/tags/v26.3.27",
+        "archiveSha256": "992a4997e6bb846d11469435d687f99ef812fcde1e0a009bb8e95189ea20331d",
+        "package": "./main",
+        "go": {
+          "version": "1.26.3",
+          "linuxAmd64": {
+            "file": "go1.26.3.linux-amd64.tar.gz",
+            "url": "https://go.dev/dl/go1.26.3.linux-amd64.tar.gz",
+            "sha256": "2b2cfc7148493da5e73981bffbf3353af381d5f93e789c82c79aff64962eb556"
+          }
+        }
+      }
+    },
+    "olcrtc": {
+      "version": "b3368087",
+      "license": "WTFPL",
+      "soName": "libolcrtc.so",
+      "commit": "b33680871cdb94a7523829f8073de3eafa5b3ece",
+      "repository": "https://github.com/openlibrecommunity/olcrtc",
+      "archive": "https://codeload.github.com/openlibrecommunity/olcrtc/tar.gz/b33680871cdb94a7523829f8073de3eafa5b3ece",
+      "sha256": "f4c8b7571bec2ebaa07d8ca4bf1ec74bbf099c088d2ccde247ec1cab386fe2fa",
+      "abis": [
+        "arm64-v8a"
+      ],
+      "go": {
+        "version": "1.26.3",
+        "linuxAmd64": {
+          "file": "go1.26.3.linux-amd64.tar.gz",
+          "url": "https://go.dev/dl/go1.26.3.linux-amd64.tar.gz",
+          "sha256": "2b2cfc7148493da5e73981bffbf3353af381d5f93e789c82c79aff64962eb556"
+        },
+        "windowsAmd64": {
+          "file": "go1.26.3.windows-amd64.zip",
+          "url": "https://go.dev/dl/go1.26.3.windows-amd64.zip",
+          "sha256": "20d2ceafb4ed41b96b879010927b28bc92a5be57a7c1801ce365a9ca51d3224a"
+        }
+      }
+    }
+  }
+}

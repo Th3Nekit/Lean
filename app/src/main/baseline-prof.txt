@@ -1,0 +1,38 @@
+# Baseline profile — what ART compiles ahead of time instead of interpreting.
+#
+# Without one, an app's own classes start out interpreted and are JIT-compiled while
+# they run, which lands squarely on the frames a user is watching: the first launch,
+# the first scroll of the server list, the first navigation. The Compose libraries
+# ship their own profiles, so the gap is OUR code — and it is the part that runs on
+# every frame of a fling (ServerRow, the glass modifier, the theme spine) and on the
+# path to the first frame (the settings read, the palette build, the icon wiring).
+#
+# Rules are the ART profile format: H = hot, S = startup, P = post-startup, then the
+# JVM signature. `**` matches any package depth or any signature, so these say "every
+# method of every class under here", which is the right granularity for a hand-written
+# profile — a measured one from a Macrobenchmark run would be narrower, and can replace
+# this file wholesale when there is a device in CI to produce it.
+#
+# It changes compilation only. Nothing here can alter behaviour: a rule that matches
+# nothing is dropped with a build warning, and a rule that matches simply moves work
+# from the first run to install time.
+
+# The whole UI layer: composables, the theme spine, and the modifiers under every panel.
+HSPLcom/th3web/lean/ui/**->**(**)**
+Lcom/th3web/lean/ui/**;
+
+# Settings and profile parsing — read before the first frame can be drawn at all, since
+# the window background, the palette and the launcher icon all resolve from them.
+HSPLcom/th3web/lean/data/**->**(**)**
+Lcom/th3web/lean/data/**;
+
+# The connection layer. Not on the first-frame path, but it runs at the moment a user
+# is staring at the button waiting for something to happen.
+HSPLcom/th3web/lean/core/**->**(**)**
+Lcom/th3web/lean/core/**;
+
+# The app entry point itself.
+HSPLcom/th3web/lean/LeanApp;->**(**)**
+HSPLcom/th3web/lean/MainActivity;->**(**)**
+Lcom/th3web/lean/LeanApp;
+Lcom/th3web/lean/MainActivity;

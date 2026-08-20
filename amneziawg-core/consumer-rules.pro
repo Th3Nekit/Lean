@@ -1,0 +1,3 @@
+-keep class org.amnezia.awg.GoBackend { *; }
+-keep class com.th3web.lean.awg.AmneziaWgNative { *; }
+-keep class com.th3web.lean.awg.JniAmneziaWgNative { *; }

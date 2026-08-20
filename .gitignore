@@ -1,2 +1,51 @@
-apk/
+# Reference APKs (third-party, never committed)
 *.apk
+
+/.native-work/
+/artifacts/sing-box
+/native/amneziawg/generated/
+
+# The shared debug key is not published: releases are signed with a key that
+# lives in CI secrets, and a debug key is per machine. Gradle falls back to the
+# one the SDK generates.
+app/debug.keystore
+
+# Android / Gradle
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Build outputs
+**/build/
+app/release/
+
+# Core artifacts fetched/built in CI (not stored in VCS)
+app/libs/*.aar
+
+# Upstream protocol helpers (naive, mieru) vendored by native/plugins/vendor.ps1.
+# Pinned by sha256 in native/versions.lock and re-fetched per build — the lock is the
+# source of truth, the binaries are just its output.
+app/src/main/jniLibs/
+
+# Kotlin
+.kotlin/
+
+# Decompilation / analysis scratch scripts live at the repo root and are never
+# source. Scoped to the root on purpose: `*.py` matched every directory, so the
+# crash-panel service under ops/ had to be force-added and any Python a
+# contributor adds there would be ignored without a word.
+/*.py
+
+# Misc
+*.log
+
+
+__pycache__/
+*.pyc

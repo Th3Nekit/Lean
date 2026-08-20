@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window-chrome mirrors of the three real canvases in ui/theme/Color.kt. Each one
+         MUST equal its column's background exactly: the launch window is drawn from these
+         before any Compose frame exists, so a mismatch is a visible flash on every cold
+         start. (The single #060608 that used to live here matched no column at all.) -->
+    <color name="lean_bg_dark">#101319</color>
+    <color name="lean_bg_amoled">#000000</color>
+    <color name="lean_bg_light">#FAF9FD</color>
+
+    <!-- Shipped name, no longer referenced: Theme.Lean now points at lean_bg_dark, and
+         nothing else in res/ or the manifest names this one. Kept as an alias of the dark
+         canvas rather than deleted so anything reaching for it (a merge, a stale layout)
+         still lands on a REAL column instead of resurrecting the #060608 flash. -->
+    <color name="lean_background">#101319</color>
+</resources>

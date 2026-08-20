@@ -1,0 +1,20 @@
+<resources>
+    <string name="app_name">Lean</string>
+
+    <!-- Logs -->
+    <string name="logs_title">Логи</string>
+
+    <!-- VPN service / notifications -->
+    <string name="notif_channel_name">Состояние VPN</string>
+    <string name="notif_connecting">Подключение…</string>
+    <string name="notif_connected">Подключено: %1$s</string>
+    <string name="error_no_profile">Профиль не выбран</string>
+
+    <!-- Static launcher shortcuts (res/xml/shortcuts.xml) -->
+    <string name="shortcut_connect_short">Подключить</string>
+    <string name="shortcut_connect_long">Подключить Lean</string>
+    <string name="shortcut_disconnect_short">Отключить</string>
+    <string name="shortcut_disconnect_long">Отключить Lean</string>
+    <string name="shortcut_toggle_short">Переключить</string>
+    <string name="shortcut_toggle_long">Переключить Lean</string>
+</resources>

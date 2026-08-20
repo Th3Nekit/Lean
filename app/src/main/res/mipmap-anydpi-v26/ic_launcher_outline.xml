@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- «Контур». The foreground carries the artwork at 72/108 scale (the launcher's
+     viewport) with its ring replicated outwards; monochrome stays the flat vector
+     silhouette, since a themed icon is a single colour and neither gradient nor
+     texture survives it. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/launcher_bg_outline" />
+    <foreground android:drawable="@drawable/ic_pack_05_fg" />
+    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive-icon background for each launcher variant: the average of that
+     artwork's own border, so the layer under it matches its edges. It is all but
+     invisible — the foreground is opaque across the whole canvas — but the format
+     wants a background, and a matching one is what keeps a launcher that reveals
+     more than the 72dp viewport from showing a seam. -->
+<resources>
+    <color name="launcher_bg_default">#070C1A</color>
+    <color name="launcher_bg_accent">#B493F1</color>
+    <color name="launcher_bg_pack03">#E566C3</color>
+    <color name="launcher_bg_pack04">#27B5FB</color>
+    <color name="launcher_bg_outline">#000000</color>
+    <color name="launcher_bg_pack06">#5F5DBD</color>
+    <color name="launcher_bg_sunset">#FB3D08</color>
+    <color name="launcher_bg_pack08">#140536</color>
+    <color name="launcher_bg_pack09">#F6F6F7</color>
+    <color name="launcher_bg_obsidian">#0A0A0B</color>
+    <color name="launcher_bg_frost">#FEFEFE</color>
+    <color name="launcher_bg_neon">#000000</color>
+    <color name="launcher_bg_pack13">#905A0F</color>
+    <color name="launcher_bg_pack14">#597CE3</color>
+    <color name="launcher_bg_pack15">#0B070D</color>
+    <color name="launcher_bg_pack16">#1F1F1F</color>
+    <color name="launcher_bg_pack17">#EAE9F9</color>
+    <color name="launcher_bg_pack18">#020F5E</color>
+    <color name="launcher_bg_pack19">#EF377A</color>
+    <color name="launcher_bg_pack20">#9EAFC1</color>
+    <color name="launcher_bg_pack21">#2280F4</color>
+    <color name="launcher_bg_pack23">#E8DCFD</color>
+    <color name="launcher_bg_black">#000000</color>
+</resources>

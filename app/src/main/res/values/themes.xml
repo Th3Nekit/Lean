@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Window/splash chrome only — the UI's colours are driven by Compose (ui/theme).
+         There is one style per REAL canvas, and MainActivity.onCreate picks between them
+         with setTheme() BEFORE super.onCreate, from the same settings snapshot LeanTheme
+         seeds itself with. A values-night qualifier cannot do this job: it follows the
+         SYSTEM's dark mode, whereas the choice here is the user's own themeMode. -->
+    <style name="Theme.Lean" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/lean_bg_dark</item>
+        <item name="android:navigationBarColor">@color/lean_bg_dark</item>
+        <item name="android:windowBackground">@color/lean_bg_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Theme.Lean.Amoled">
+        <item name="android:statusBarColor">@color/lean_bg_amoled</item>
+        <item name="android:navigationBarColor">@color/lean_bg_amoled</item>
+        <item name="android:windowBackground">@color/lean_bg_amoled</item>
+    </style>
+
+    <!-- windowLightStatusBar = dark icons, which is what the light canvas needs. It is
+         only the pre-composition value; enableEdgeToEdge re-asserts the same thing (and
+         honours «Системные панели») as soon as onCreate runs. -->
+    <style name="Theme.Lean.Light">
+        <item name="android:statusBarColor">@color/lean_bg_light</item>
+        <item name="android:navigationBarColor">@color/lean_bg_light</item>
+        <item name="android:windowBackground">@color/lean_bg_light</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+</resources>

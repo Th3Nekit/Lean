@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-API-26 «Контур»: no adaptive layers there, and the artwork is already a
+     finished square icon, so it is used exactly as drawn. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/ic_pack_05" />

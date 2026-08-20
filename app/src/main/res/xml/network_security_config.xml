@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Cleartext HTTP is blocked by default from targetSdk 28 up, which broke every
+    app-side probe that used a plain-http URL: «Проверить соединение» defaults to
+    NekoBox's http://cp.cloudflare.com/ and its HttpURLConnection threw
+    "Cleartext HTTP traffic not permitted" on every tap, reported to the user as
+    «Нет интернета» even through a perfectly healthy tunnel. The same applied to
+    the GET/HEAD ping modes and to any http:// test URL a user types in.
+
+    The core itself (Go) never consulted this policy, so the config's own urltest
+    kept working — which is exactly why the failure looked like a UI bug.
+
+    Same policy as the reference client (NekoBox's network_security_config.xml):
+    a VPN client's probe/test endpoints are user-supplied and routinely plain
+    http; refusing them in the platform layer only breaks diagnostics. Traffic
+    that carries anything sensitive (subscription fetches) uses https on its own.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

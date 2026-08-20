@@ -1,0 +1,87 @@
+diff --git a/api-android.go b/api-android.go
+index 02797b0..8e7ea4d 100644
+--- a/api-android.go
++++ b/api-android.go
+@@ -11,7 +11,6 @@ import "C"
+ import (
+ 	"fmt"
+ 	"math"
+-	"net"
+ 	"os"
+ 	"os/signal"
+ 	"runtime"
+@@ -22,7 +21,6 @@ import (
+ 
+ 	"github.com/amnezia-vpn/amneziawg-go/conn"
+ 	"github.com/amnezia-vpn/amneziawg-go/device"
+-	"github.com/amnezia-vpn/amneziawg-go/ipc"
+ 	"github.com/amnezia-vpn/amneziawg-go/tun"
+ 	"golang.org/x/sys/unix"
+ )
+@@ -48,8 +46,7 @@ func (l AndroidLogger) Printf(format string, args ...interface{}) {
+ }
+ 
+ type TunnelHandle struct {
+-	device *device.Device
+-	uapi   net.Listener
++	device *device.Device
+ }
+ 
+ var tunnelHandles map[int32]TunnelHandle
+@@ -91,33 +88,9 @@ func awgTurnOn(interfaceName string, tunFd int32, settings string) int32 {
+ 	}
+ 	device.DisableSomeRoamingForBrokenMobileSemantics()
+ 
+-	var uapi net.Listener
+-
+-	uapiFile, err := ipc.UAPIOpen(name)
+-	if err != nil {
+-		logger.Errorf("UAPIOpen: %v", err)
+-	} else {
+-		uapi, err = ipc.UAPIListen(name, uapiFile)
+-		if err != nil {
+-			uapiFile.Close()
+-			logger.Errorf("UAPIListen: %v", err)
+-		} else {
+-			go func() {
+-				for {
+-					conn, err := uapi.Accept()
+-					if err != nil {
+-						return
+-					}
+-					go device.IpcHandle(conn)
+-				}
+-			}()
+-		}
+-	}
+-
+ 	err = device.Up()
+ 	if err != nil {
+ 		logger.Errorf("Unable to bring up device: %v", err)
+-		uapiFile.Close()
+ 		device.Close()
+ 		return -1
+ 	}
+@@ -126,11 +103,10 @@ func awgTurnOn(interfaceName string, tunFd int32, settings string) int32 {
+ 	}
+ 	if i == math.MaxInt32 {
+ 		logger.Errorf("Unable to find empty handle")
+-		uapiFile.Close()
+ 		device.Close()
+ 		return -1
+ 	}
+-	tunnelHandles[i] = TunnelHandle{device: device, uapi: uapi}
++	tunnelHandles[i] = TunnelHandle{device: device}
+ 	return i
+ }
+ 
+@@ -141,9 +117,6 @@ func awgTurnOff(tunnelHandle int32) {
+ 		return
+ 	}
+ 	delete(tunnelHandles, tunnelHandle)
+-	if handle.uapi != nil {
+-		handle.uapi.Close()
+-	}
+ 	handle.device.Close()
+ }
+ 

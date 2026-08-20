@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static launcher shortcuts (API 25+; silently ignored below). Each routes
+     through the lean:// deep links handled by MainActivity, so connect still
+     goes through the Activity VPN-consent path on first use.
+     targetPackage must be the LITERAL applicationId (no manifest placeholders
+     in res/xml) - the debug build overrides this file in app/src/debug/res/xml
+     with targetPackage="com.th3web.lean.debug". -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="connect"
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:shortcutShortLabel="@string/shortcut_connect_short"
+        android:shortcutLongLabel="@string/shortcut_connect_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="lean://connect"
+            android:targetPackage="com.th3web.lean"
+            android:targetClass="com.th3web.lean.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="disconnect"
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:shortcutShortLabel="@string/shortcut_disconnect_short"
+        android:shortcutLongLabel="@string/shortcut_disconnect_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="lean://disconnect"
+            android:targetPackage="com.th3web.lean"
+            android:targetClass="com.th3web.lean.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="toggle"
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:shortcutShortLabel="@string/shortcut_toggle_short"
+        android:shortcutLongLabel="@string/shortcut_toggle_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="lean://toggle"
+            android:targetPackage="com.th3web.lean"
+            android:targetClass="com.th3web.lean.MainActivity" />
+    </shortcut>
+
+</shortcuts>

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-variant override of res/xml/shortcuts.xml: the debug build has
+     applicationIdSuffix ".debug", and a static shortcut whose targetPackage
+     does not match the installing package is dropped by the launcher.
+     targetClass stays com.th3web.lean.MainActivity - the class FQN does not
+     change with the applicationId suffix. Keep in sync with the main file. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="connect"
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:shortcutShortLabel="@string/shortcut_connect_short"
+        android:shortcutLongLabel="@string/shortcut_connect_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="lean://connect"
+            android:targetPackage="com.th3web.lean.debug"
+            android:targetClass="com.th3web.lean.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="disconnect"
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:shortcutShortLabel="@string/shortcut_disconnect_short"
+        android:shortcutLongLabel="@string/shortcut_disconnect_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="lean://disconnect"
+            android:targetPackage="com.th3web.lean.debug"
+            android:targetClass="com.th3web.lean.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="toggle"
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:shortcutShortLabel="@string/shortcut_toggle_short"
+        android:shortcutLongLabel="@string/shortcut_toggle_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="lean://toggle"
+            android:targetPackage="com.th3web.lean.debug"
+            android:targetClass="com.th3web.lean.MainActivity" />
+    </shortcut>
+
+</shortcuts>

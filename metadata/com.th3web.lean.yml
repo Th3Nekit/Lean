@@ -1,0 +1,70 @@
+# F-Droid build recipe.
+#
+# Copy this into fdroiddata/metadata/ when submitting. It lives here so the
+# recipe and the code it builds move together: a change to the native build
+# scripts that breaks this file is visible in the same commit.
+#
+# Builds the `foss` flavour. Everything in it is compiled from source by
+# native/build-linux.sh: the sing-box core, AmneziaWG-Go, and the Mieru, Xray
+# and olcRTC helpers. The one absence is NaiveProxy, which is a Chromium fork
+# rather than a Go program and cannot be built on an ordinary build server; the
+# app reports that protocol per server as unavailable on this device.
+
+Categories:
+  - Internet
+  - Security
+License: GPL-3.0-or-later
+AuthorName: Th3Nekit
+SourceCode: https://github.com/Th3Nekit/Lean
+IssueTracker: https://github.com/Th3Nekit/Lean/issues
+Changelog: https://github.com/Th3Nekit/Lean/releases
+WebSite: https://th3web.com/lean/
+
+AutoName: Lean
+
+Description: |-
+    Lean is a VPN client for Android built on the sing-box core, with its own
+    interface, routing and subscription handling.
+
+    Protocols: VLESS/Reality, VMess, Trojan, Shadowsocks, Hysteria2, TUIC,
+    WireGuard and AmneziaWG (DPI-resistant obfuscation).
+
+    * import share links, subscriptions and .conf / .json / .yaml configs
+    * split tunnelling per application, kill switch, custom DNS, LAN bypass
+    * rule-based routing with geoip/geosite rule-sets
+    * per-node latency measurement and automatic selection of the fastest server
+    * quick settings tile, dark, light and AMOLED themes, live theming
+    * no ads, no accounts, no analytics
+
+    Everything in this build is compiled from source, including the Mieru, Xray
+    (for VLESS over XHTTP) and olcRTC helpers. NaiveProxy is the one protocol
+    missing: it is a Chromium fork rather than a Go program, so it cannot be
+    built here. The build published on the project's own site includes it.
+
+RepoType: git
+Repo: https://github.com/Th3Nekit/Lean.git
+
+Builds:
+  - versionName: 1.1.0
+    versionCode: 31
+    commit: v1.1.0
+    subdir: app
+    gradle:
+      - foss
+    sudo:
+      - apt-get update
+      - apt-get install -y patch curl tar unzip python3
+    prebuild:
+      - ../native/build-linux.sh
+    # The build needs two NDKs: r25 (25.0.8775105) for the sing-box core, because
+    # that is what the pinned gomobile expects, and r26b (26.1.10909125) for
+    # AmneziaWG-Go. Only one can be declared here, so the script installs whichever
+    # one is missing through sdkmanager, which checks Google's own checksums. It
+    # uses ANDROID_NDK_HOME only when that is the version being asked for, so
+    # declaring either of the two is safe.
+    ndk: r25
+
+AutoUpdateMode: Version v%v
+UpdateCheckMode: Tags ^v[0-9.]+$
+CurrentVersion: 1.1.0
+CurrentVersionCode: 31

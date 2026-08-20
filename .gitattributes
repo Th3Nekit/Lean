@@ -1,0 +1,27 @@
+# Line endings are checked in as LF, always. The project is developed on Windows,
+# where Git would otherwise store whatever the working copy has, and the build
+# then breaks on Linux in ways that are tedious to diagnose: F-Droid runs both
+# `gradlew` and `native/build-linux.sh`, and a CR at the end of the shebang makes
+# the kernel look for an interpreter named "/bin/sh\r". The `.patch` files fail
+# the same way, since `patch` treats the CR as part of the context line.
+* text=auto eol=lf
+
+# Windows-only, and only correct with CRLF.
+*.bat text eol=crlf
+
+# Patches are compared byte for byte against a pinned checksum, so nothing may
+# touch them. `-whitespace` also keeps Git from flagging the trailing space that
+# a legitimately empty context line consists of.
+*.patch -text -whitespace
+
+# Binary: never converted, never diffed as text.
+*.png binary
+*.jpg binary
+*.webp binary
+*.ttf binary
+*.jar binary
+*.aar binary
+*.so binary
+*.keystore binary
+*.jks binary
+gradle/wrapper/gradle-wrapper.jar binary

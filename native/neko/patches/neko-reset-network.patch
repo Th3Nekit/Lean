@@ -1,0 +1,56 @@
+Expose Router().ResetNetwork() on BoxInstance.
+
+Upstream NekoBox never calls it — the only reference in box.go is commented out
+inside Sleep() — and it exposes no way for the host app to call it either. That
+leaves Libcore.resetAllConnections(true) as the sole reaction available to an
+Android VPN service when the default network changes, and it is not enough:
+
+    // common/conntrack/track.go
+    func Close() { ... }                     // closes dialled sockets, nothing else
+
+    // route/router.go
+    func (r *Router) ResetNetwork() {
+        r.network.ResetNetwork()             // conntrack.Close() + InterfaceUpdated()
+        r.dns.ResetNetwork()                 // ClearCache() + close every transport
+    }
+
+So after a Wi-Fi <-> mobile handover the DNS transports stay bound to the dead
+interface and the DNS cache keeps its stale negative answers. Field diagnostics
+show the consequence: twenty-five minutes into a session every single dial began
+failing with
+
+    connection: open connection to ... using outbound/vless[proxy]:
+        lookup zh.example.com: empty result
+
+while the UI still read "подключено" — the tunnel resolved nothing until the user
+toggled it off and on. WireGuard endpoints are affected the same way, since their
+UDP socket is only re-bound by the InterfaceUpdated() half.
+
+The added method is guarded three ways: the instance mutex (so it cannot race
+Close()), the started-state check (state 1; 0 is new and 2 is closed), and the
+same panic-to-error deferral Start()/Close() use, because it is invoked from a
+ConnectivityManager callback where a crash would take the whole service down.
+
+--- a/libcore/box.go
++++ b/libcore/box.go
+@@ -177,6 +177,20 @@ func (b *BoxInstance) Wake() {
+ 	}
+ }
+ 
++func (b *BoxInstance) ResetNetwork() {
++	b.access.Lock()
++	defer b.access.Unlock()
++
++	defer device.DeferPanicToError("box.ResetNetwork", func(err_ error) {
++		log.Println(err_.Error())
++	})
++
++	if b.state != 1 {
++		return
++	}
++	b.Box.Router().ResetNetwork()
++}
++
+ func (b *BoxInstance) SetAsMain() {
+ 	mainInstance = b
+ 	goServeProtect(true)
