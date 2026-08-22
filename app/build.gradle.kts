@@ -79,9 +79,14 @@ android {
 
     // Ship per-ABI APKs plus a universal one. The pinned Neko core contains all
     // four Android ABIs and each split APK keeps only its own native library.
+    // One APK per ABI plus a universal one, so a phone downloads ~18 MB instead of ~88.
+    //
+    // F-Droid gets the universal APK alone: its build refuses outright when a build
+    // produces more than one APK, since it publishes exactly one file per version code.
+    // `-PsingleApk` turns the split off, and the recipe passes it through gradleprops.
     splits {
         abi {
-            isEnable = true
+            isEnable = !project.hasProperty("singleApk")
             reset()
             include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
             isUniversalApk = true
@@ -134,9 +139,15 @@ android {
             isMinifyEnabled = true
             isDebuggable = false
             // Use the real release key when the CI secret is present, else fall back to
-            // the (committed) debug key so an unsigned local release build still works.
-            signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
-                ?: signingConfigs.getByName("debug")
+            // the debug key so a local release build still assembles.
+            //
+            // findByName, not getByName: F-Droid strips the signing configs out of this
+            // file before building, because it signs with its own key. getByName then
+            // threw "SigningConfig with name 'release' not found" and took the build with
+            // it. With findByName the whole thing resolves to null, which is precisely
+            // what an unsigned build wants.
+            signingConfig = signingConfigs.findByName("release")?.takeIf { it.storeFile != null }
+                ?: signingConfigs.findByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
