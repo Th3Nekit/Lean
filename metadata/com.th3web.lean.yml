@@ -45,7 +45,7 @@ Builds:
       - apt-get install -y patch curl tar unzip python3
     gradle:
       - foss
-    prebuild: ../native/build-linux.sh
+    prebuild: sh ../native/build-linux.sh
     ndk: r25
 
 AutoUpdateMode: Version v%v
