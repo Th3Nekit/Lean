@@ -177,6 +177,7 @@ fun AboutScreen(onBack: () -> Unit, onOpenLicenses: () -> Unit = {}) {
  */
 @Composable
 private fun SubscriptionCard() {
+    if (!BuildConfig.SHOWS_PROMO) return
     val context = LocalContext.current
     Card(
         modifier = Modifier

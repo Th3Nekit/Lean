@@ -19,8 +19,8 @@ android {
         // reported as connected, and Clash .yaml import. versionCode keeps its own
         // monotonic count (installers order by it, never by the name), so it continues
         // from the 0.9.x CI series rather than restarting at 1.
-        versionCode = 31
-        versionName = "1.1.0"
+        versionCode = 32
+        versionName = "1.1.1"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -43,9 +43,15 @@ android {
         create("full") {
             dimension = "distribution"
             isDefault = true
+            // The build handed out on GitHub and 4PDA, where pointing at the author's own
+            // service is fair. F-Droid is someone else's catalogue: an app that arrives
+            // from it advertising a paid subscription is an anti-feature there, and
+            // rightly so, so the foss build has no promotion in it at all.
+            buildConfigField("boolean", "SHOWS_PROMO", "true")
         }
         create("foss") {
             dimension = "distribution"
+            buildConfigField("boolean", "SHOWS_PROMO", "false")
             // Only NaiveProxy is absent, and only because it cannot be built from source
             // on an ordinary build server: it is a Chromium fork, not a Go program.
             // Mieru, Xray and olcRTC are built from pinned sources by

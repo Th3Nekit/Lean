@@ -41,13 +41,16 @@ Description: |-
     missing: it is a Chromium fork rather than a Go program, so it cannot be
     built here. The build published on the project's own site includes it.
 
+    This build also carries no promotion of the author's own paid service; the
+    build on the project's site does.
+
 RepoType: git
 Repo: https://github.com/Th3Nekit/Lean.git
 
 Builds:
-  - versionName: 1.1.0
-    versionCode: 31
-    commit: v1.1.0
+  - versionName: 1.1.1
+    versionCode: 32
+    commit: v1.1.1
     subdir: app
     gradle:
       - foss
@@ -66,5 +69,5 @@ Builds:
 
 AutoUpdateMode: Version v%v
 UpdateCheckMode: Tags ^v[0-9.]+$
-CurrentVersion: 1.1.0
-CurrentVersionCode: 31
+CurrentVersion: 1.1.1
+CurrentVersionCode: 32

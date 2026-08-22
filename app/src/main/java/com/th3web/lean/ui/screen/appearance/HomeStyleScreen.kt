@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.th3web.lean.LeanApp
+import com.th3web.lean.BuildConfig
 import com.th3web.lean.data.AppearanceRanges
 import com.th3web.lean.ui.components.LeanDivider
 import com.th3web.lean.ui.components.LeanGroup
@@ -203,12 +204,19 @@ private val HERO_GLYPHS: List<Pair<String, String>> = listOf(
     "pulse" to "Пульс",
 )
 
-private val HOME_BLOCKS: List<Pair<Int, String>> = listOf(
-    HomeBlock.SUBSCRIPTION to "Подписка",
-    HomeBlock.QUICK_PICK to "Быстрый выбор",
-    HomeBlock.CONNECTION_TEST to "Проверка соединения",
-    HomeBlock.BANNER to "Баннер Telegram",
-)
+/**
+ * The blocks «Главный экран» can turn off.
+ *
+ * The Telegram banner is absent from the build that carries no promotion: a switch for
+ * something that is not there reads as broken, and its counter would say one more block
+ * exists than the screen can show.
+ */
+private val HOME_BLOCKS: List<Pair<Int, String>> = buildList {
+    add(HomeBlock.SUBSCRIPTION to "Подписка")
+    add(HomeBlock.QUICK_PICK to "Быстрый выбор")
+    add(HomeBlock.CONNECTION_TEST to "Проверка соединения")
+    if (BuildConfig.SHOWS_PROMO) add(HomeBlock.BANNER to "Баннер Telegram")
+}
 
 private fun glyphLabel(key: String): String =
     HERO_GLYPHS.firstOrNull { it.first == key }?.second ?: "Питание"

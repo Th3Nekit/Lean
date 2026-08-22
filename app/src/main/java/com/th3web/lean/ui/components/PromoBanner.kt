@@ -42,6 +42,7 @@ import com.th3web.lean.ui.theme.LeanColors
 import com.th3web.lean.ui.theme.LeanCorner
 import com.th3web.lean.ui.theme.LeanMotion
 import com.th3web.lean.ui.theme.LeanOptions
+import com.th3web.lean.BuildConfig
 import com.th3web.lean.ui.theme.LeanType
 import com.th3web.lean.ui.theme.leanGlass
 import com.th3web.lean.ui.theme.motionAllowed
@@ -61,6 +62,7 @@ fun TelegramPromoBanner(onClick: () -> Unit, modifier: Modifier = Modifier) {
     // «Блоки → Баннер Telegram». Honoured here rather than at the call site: the banner
     // is one component wherever it is placed, and a gate left behind on a screen it has
     // moved away from is a knob that silently stops working.
+    if (!BuildConfig.SHOWS_PROMO) return
     if (!LeanOptions.showBannerBlock) return
     val animate = motionAllowed() && LeanOptions.bannerSheen
     Surface(
