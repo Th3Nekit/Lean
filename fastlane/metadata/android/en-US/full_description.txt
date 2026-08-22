@@ -13,7 +13,3 @@ VLESS over XHTTP through helper processes.
 * per-node latency measurement and automatic selection of the fastest server
 * quick settings tile, dark, light and AMOLED themes, live theming
 * no ads, no accounts, no analytics
-
-This build carries no NaiveProxy: it is a Chromium fork rather than a Go
-program and cannot be compiled on an ordinary build server, so servers using
-that protocol are reported as unavailable on the device.

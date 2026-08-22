@@ -21,15 +21,10 @@ Builds:
     subdir: app
     sudo:
       - apt-get update
-      - apt-get install -y patch curl tar unzip python3
+      - apt-get install -y patch
     gradle:
       - foss
-    prebuild: sh ../native/build-linux.sh
-    scanignore:
-      - .native-work
-      - app/libs/libcore.aar
-      - native/amneziawg/generated/jni
-      - app/src/main/jniLibs
+    build: sh ../native/build-linux.sh
     ndk: r25
     gradleprops:
       - singleApk
