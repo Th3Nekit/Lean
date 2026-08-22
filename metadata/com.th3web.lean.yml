@@ -25,6 +25,12 @@ Builds:
     gradle:
       - foss
     prebuild: sh ../native/build-linux.sh
+    scandelete:
+      - .native-work
+    scanignore:
+      - app/libs/libcore.aar
+      - native/amneziawg/generated/jni
+      - app/src/main/jniLibs
     ndk: r25
 
 AutoUpdateMode: Version
