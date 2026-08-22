@@ -84,6 +84,14 @@ android {
     // F-Droid gets the universal APK alone: its build refuses outright when a build
     // produces more than one APK, since it publishes exactly one file per version code.
     // `-PsingleApk` turns the split off, and the recipe passes it through gradleprops.
+    // AGP otherwise signs a "Dependency metadata" block into the APK: an opaque,
+    // Play-oriented blob listing the libraries the build used. F-Droid's scanner rejects
+    // any extra signing block it cannot read, and nothing in this app needs it.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
     splits {
         abi {
             isEnable = !project.hasProperty("singleApk")
