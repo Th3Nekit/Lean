@@ -122,7 +122,17 @@ find_ndk() {
 }
 
 # Prints the path to sdkmanager, or nothing when the SDK has none.
+# Prints the path to a working sdkmanager, or nothing.
+#
+# PATH comes first on purpose. F-Droid ships its own sdkmanager there, and the one
+# sitting inside an older SDK at tools/bin is a Java program that needs JAXB, which
+# stopped shipping with the JDK at 11: it dies with NoClassDefFoundError instead of
+# installing anything.
 find_sdkmanager() {
+    if command -v sdkmanager >/dev/null 2>&1; then
+        command -v sdkmanager
+        return 0
+    fi
     _sdk=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}
     [ -n "$_sdk" ] || return 1
     for _candidate in \

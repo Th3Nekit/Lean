@@ -19,8 +19,8 @@ android {
         // reported as connected, and Clash .yaml import. versionCode keeps its own
         // monotonic count (installers order by it, never by the name), so it continues
         // from the 0.9.x CI series rather than restarting at 1.
-        versionCode = 34
-        versionName = "1.1.3"
+        versionCode = 35
+        versionName = "1.1.4"
 
         vectorDrawables {
             useSupportLibrary = true
