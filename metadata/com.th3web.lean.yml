@@ -25,9 +25,8 @@ Builds:
     gradle:
       - foss
     prebuild: sh ../native/build-linux.sh
-    scandelete:
-      - .native-work
     scanignore:
+      - .native-work
       - app/libs/libcore.aar
       - native/amneziawg/generated/jni
       - app/src/main/jniLibs
