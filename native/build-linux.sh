@@ -143,12 +143,23 @@ ensure_platform() {
     _sdk=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}
     _jar="$_sdk/platforms/android-$_api/android.jar"
     [ -f "$_jar" ] && { printf '%s' "$_jar"; return 0; }
-    _manager=$(find_sdkmanager) ||
-        die "android-$_api is missing and sdkmanager was not found under ${_sdk:-<unset>}"
-    echo "   installing platform android-$_api" >&2
-    yes 2>/dev/null | "$_manager" --sdk_root="$_sdk" "platforms;android-$_api" >/dev/null 2>&1 || true
-    [ -f "$_jar" ] || die "could not install platform android-$_api"
-    printf '%s' "$_jar"
+
+    # Ask for it, and let sdkmanager say why if it refuses: the reason used to go to
+    # /dev/null, which left "could not install" as the only thing in the log.
+    if _manager=$(find_sdkmanager); then
+        echo "   installing platform android-$_api" >&2
+        yes 2>/dev/null | "$_manager" --sdk_root="$_sdk" "platforms;android-$_api" >&2 || true
+    fi
+    [ -f "$_jar" ] && { printf '%s' "$_jar"; return 0; }
+
+    # Still nothing. The bindings gobind emits are ordinary Java and compile against
+    # any recent platform, so the newest one already on the machine will do rather
+    # than failing a build over a download the server would not make.
+    _have=$(ls -1 "$_sdk/platforms" 2>/dev/null |
+        sed -n 's/^android-\([0-9][0-9]*\)$/\1/p' | sort -n | tail -1)
+    [ -n "$_have" ] || die "no Android platform under $_sdk/platforms and android-$_api could not be installed"
+    echo "   android-$_api is unavailable; using android-$_have instead" >&2
+    printf '%s' "$_sdk/platforms/android-$_have/android.jar"
 }
 
 install_ndk() {

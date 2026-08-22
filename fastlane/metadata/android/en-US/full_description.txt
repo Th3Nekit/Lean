@@ -1,0 +1,19 @@
+Lean is a VPN client for Android built on the sing-box core, with its own
+interface, routing and subscription handling. It works with any server or
+subscription; there is nothing to sign up for.
+
+Protocols: VLESS/Reality, VMess, Trojan, Shadowsocks, Hysteria2, TUIC,
+WireGuard and AmneziaWG with DPI-resistant obfuscation, plus Mieru, olcRTC and
+VLESS over XHTTP through helper processes.
+
+* import share links, subscriptions and .conf / .json / .yaml configs
+* subscriptions can be filed into folders and collapsed away
+* split tunnelling per application, kill switch, custom DNS, LAN bypass
+* rule-based routing with geoip/geosite rule-sets
+* per-node latency measurement and automatic selection of the fastest server
+* quick settings tile, dark, light and AMOLED themes, live theming
+* no ads, no accounts, no analytics
+
+This build carries no NaiveProxy: it is a Chromium fork rather than a Go
+program and cannot be compiled on an ordinary build server, so servers using
+that protocol are reported as unavailable on the device.

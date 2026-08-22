@@ -1,0 +1,13 @@
+Folders for subscriptions, so a long list can be put away behind one header.
+
+A ping button on every subscription and folder, and any check can be stopped by
+tapping it again.
+
+Adding a subscription was reworked: the link comes first and takes the focus,
+paste sits inside the field, and a subscription that could not be fetched is
+still saved rather than lost.
+
+Fixed the tunnel that reported "connected" while carrying nothing after the
+phone changed address inside the same mobile network.
+
+This build has no promotion of the author's paid service in it.
