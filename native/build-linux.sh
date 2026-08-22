@@ -121,19 +121,42 @@ find_ndk() {
     install_ndk "$_wanted"
 }
 
+# Prints the path to sdkmanager, or nothing when the SDK has none.
+find_sdkmanager() {
+    _sdk=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}
+    [ -n "$_sdk" ] || return 1
+    for _candidate in \
+        "$_sdk/cmdline-tools/latest/bin/sdkmanager" \
+        "$_sdk/cmdline-tools/bin/sdkmanager" \
+        "$_sdk/tools/bin/sdkmanager"
+    do
+        [ -x "$_candidate" ] && printf '%s' "$_candidate" && return 0
+    done
+    return 1
+}
+
+# gomobile needs an android.jar to compile against, and a build server carries only
+# the platforms its own recipes asked for: F-Droid's had no android-35. Installed the
+# same way as the NDK, through sdkmanager, which checks Google's own signatures.
+ensure_platform() {
+    _api=$1
+    _sdk=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}
+    _jar="$_sdk/platforms/android-$_api/android.jar"
+    [ -f "$_jar" ] && { printf '%s' "$_jar"; return 0; }
+    _manager=$(find_sdkmanager) ||
+        die "android-$_api is missing and sdkmanager was not found under ${_sdk:-<unset>}"
+    echo "   installing platform android-$_api" >&2
+    yes 2>/dev/null | "$_manager" --sdk_root="$_sdk" "platforms;android-$_api" >/dev/null 2>&1 || true
+    [ -f "$_jar" ] || die "could not install platform android-$_api"
+    printf '%s' "$_jar"
+}
+
 install_ndk() {
     _wanted=$1
     sdk=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}
     [ -n "$sdk" ] || die "NDK $_wanted is missing and ANDROID_HOME is not set to install it"
-    manager=""
-    for candidate in \
-        "$sdk/cmdline-tools/latest/bin/sdkmanager" \
-        "$sdk/cmdline-tools/bin/sdkmanager" \
-        "$sdk/tools/bin/sdkmanager"
-    do
-        [ -x "$candidate" ] && manager=$candidate && break
-    done
-    [ -n "$manager" ] || die "NDK $_wanted is missing and sdkmanager was not found under $sdk"
+    manager=$(find_sdkmanager) ||
+        die "NDK $_wanted is missing and sdkmanager was not found under $sdk"
     echo "   installing NDK $_wanted" >&2
     yes 2>/dev/null | "$manager" --sdk_root="$sdk" "ndk;$_wanted" >/dev/null 2>&1 || true
     [ -d "$sdk/ndk/$_wanted" ] || die "could not install NDK $_wanted"
@@ -190,8 +213,7 @@ build_neko() {
 
     log "gomobile bind"
     tags=$(python3 -c "import json;print(','.join(json.load(open('$lock'))['build']['tags']))")
-    jar="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}/platforms/android-$(pin toolchain androidCompileSdk)/android.jar"
-    [ -f "$jar" ] || die "android.jar not found at $jar (set ANDROID_HOME)"
+    jar=$(ensure_platform "$(pin toolchain androidCompileSdk)")
 
     export GOROOT="$core_root"
     export PATH="$core_root/bin:$GOPATH/bin:$PATH"
