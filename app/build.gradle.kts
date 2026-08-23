@@ -5,6 +5,18 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// F-Droid publishes one APK per version code, so the app is submitted there as four
+// builds, one per ABI. The digit each ABI adds fixes their order — armeabi-v7a first,
+// x86_64 last — and multiplying by ten leaves room for it while keeping a newer release
+// above an older one whatever its ABI.
+val abiVersionDigits = mapOf(
+    "armeabi-v7a" to 1,
+    "arm64-v8a" to 2,
+    "x86" to 3,
+    "x86_64" to 4,
+)
+val singleAbi = (project.findProperty("abiFilter") as String?)?.takeIf { it.isNotBlank() }
+
 android {
     namespace = "com.th3web.lean"
     compileSdk = 35
@@ -19,8 +31,16 @@ android {
         // reported as connected, and Clash .yaml import. versionCode keeps its own
         // monotonic count (installers order by it, never by the name), so it continues
         // from the 0.9.x CI series rather than restarting at 1.
-        versionCode = 35
+        // Plain when building everything, ten-times-plus-digit when building one ABI,
+        // which is the number the F-Droid recipe declares for that entry.
+        versionCode = if (singleAbi == null) 35 else 35 * 10 + abiVersionDigits.getValue(singleAbi)
         versionName = "1.1.4"
+
+        // Packaging one ABI is what makes the APK single-ABI; the split below is off in
+        // that case, so there is nothing else narrowing it down.
+        if (singleAbi != null) {
+            ndk { abiFilters.add(singleAbi) }
+        }
 
         vectorDrawables {
             useSupportLibrary = true
@@ -94,7 +114,7 @@ android {
 
     splits {
         abi {
-            isEnable = !project.hasProperty("singleApk")
+            isEnable = singleAbi == null && !project.hasProperty("singleApk")
             reset()
             include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
             isUniversalApk = true
