@@ -17,7 +17,7 @@ Repo: https://github.com/Th3Nekit/Lean.git
 Builds:
   - versionName: 1.1.4
     versionCode: 35
-    commit: e3eea1f5b31c62b219fe1040b292c8f46bf69d7a
+    commit: 2b4949b082714f4f0af481327b0ae9e9bd2bc0dc
     subdir: app
     sudo:
       - apt-get update
