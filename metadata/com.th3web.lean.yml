@@ -16,8 +16,8 @@ Repo: https://github.com/Th3Nekit/Lean.git
 
 Builds:
   - versionName: 1.1.4
-    versionCode: 35
-    commit: 714c2d83b907d65dcf491124e2dda765417bd694
+    versionCode: 351
+    commit: c291c1f913b086a2be06984d54daced275aae74c
     subdir: app
     sudo:
       - apt-get update
@@ -27,9 +27,56 @@ Builds:
     build: sh ../native/build-linux.sh
     ndk: r25
     gradleprops:
-      - singleApk
+      - abiFilter=armeabi-v7a
+
+  - versionName: 1.1.4
+    versionCode: 352
+    commit: c291c1f913b086a2be06984d54daced275aae74c
+    subdir: app
+    sudo:
+      - apt-get update
+      - apt-get install -y patch
+    gradle:
+      - foss
+    build: sh ../native/build-linux.sh
+    ndk: r25
+    gradleprops:
+      - abiFilter=arm64-v8a
+
+  - versionName: 1.1.4
+    versionCode: 353
+    commit: c291c1f913b086a2be06984d54daced275aae74c
+    subdir: app
+    sudo:
+      - apt-get update
+      - apt-get install -y patch
+    gradle:
+      - foss
+    build: sh ../native/build-linux.sh
+    ndk: r25
+    gradleprops:
+      - abiFilter=x86
+
+  - versionName: 1.1.4
+    versionCode: 354
+    commit: c291c1f913b086a2be06984d54daced275aae74c
+    subdir: app
+    sudo:
+      - apt-get update
+      - apt-get install -y patch
+    gradle:
+      - foss
+    build: sh ../native/build-linux.sh
+    ndk: r25
+    gradleprops:
+      - abiFilter=x86_64
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+$
+VercodeOperation:
+  - 10 * %c + 1
+  - 10 * %c + 2
+  - 10 * %c + 3
+  - 10 * %c + 4
 CurrentVersion: 1.1.4
-CurrentVersionCode: 35
+CurrentVersionCode: 354
