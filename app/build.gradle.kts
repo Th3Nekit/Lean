@@ -31,9 +31,7 @@ android {
         // reported as connected, and Clash .yaml import. versionCode keeps its own
         // monotonic count (installers order by it, never by the name), so it continues
         // from the 0.9.x CI series rather than restarting at 1.
-        // Plain when building everything, ten-times-plus-digit when building one ABI,
-        // which is the number the F-Droid recipe declares for that entry.
-        versionCode = if (singleAbi == null) 35 else 35 * 10 + abiVersionDigits.getValue(singleAbi)
+        versionCode = 35
         versionName = "1.1.4"
 
         // Packaging one ABI is what makes the APK single-ABI; the split below is off in
@@ -236,6 +234,19 @@ android {
             // core's own .so files too. That is the accepted price of the two protocols;
             // there is no per-file switch.
             useLegacyPackaging = true
+        }
+    }
+}
+
+// A single-ABI build reports 10 * versionCode + the ABI's digit, which is the number the
+// F-Droid recipe declares for that entry. It is set on the output rather than in
+// defaultConfig because fdroidserver reads versionCode out of this file with a regex:
+// an expression there parses as nothing and its update check then reads an older tag.
+androidComponents {
+    onVariants { variant ->
+        val digit = singleAbi?.let { abiVersionDigits.getValue(it) } ?: return@onVariants
+        variant.outputs.forEach { output ->
+            output.versionCode.set(35 * 10 + digit)
         }
     }
 }
