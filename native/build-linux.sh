@@ -342,6 +342,9 @@ install_plugin_go() {
 # The ABI a Go helper is built for is set by GOARCH alone: these are plain binaries,
 # no cgo, no NDK. Building all four costs a few minutes and spares anyone not on arm64
 # from being told the protocol has no build for their device.
+# The ABI is chosen by GOARCH, but the linker is the NDK's: Go refuses to link
+# android/arm without cgo, so every ABI goes through the NDK compiler rather than
+# one architecture being built differently from the other three.
 build_go_plugin() {
     name=$1
     printf '   %s\n' "$name"
@@ -357,16 +360,19 @@ build_go_plugin() {
 
     for abi in armeabi-v7a arm64-v8a x86 x86_64; do
         case $abi in
-            armeabi-v7a) goarch=arm;   goarm=7 ;;
-            arm64-v8a)   goarch=arm64; goarm=  ;;
-            x86)         goarch=386;   goarm=  ;;
-            x86_64)      goarch=amd64; goarm=  ;;
+            armeabi-v7a) goarch=arm;   goarm=7; target=armv7a-linux-androideabi ;;
+            arm64-v8a)   goarch=arm64; goarm=;  target=aarch64-linux-android ;;
+            x86)         goarch=386;   goarm=;  target=i686-linux-android ;;
+            x86_64)      goarch=amd64; goarm=;  target=x86_64-linux-android ;;
         esac
+        cc="$llvm/${target}${plugin_api}-clang"
+        [ -x "$cc" ] || die "NDK has no compiler for $abi at $cc"
         out="$root/app/src/main/jniLibs/$abi"
         mkdir -p "$out"
         (
             cd "$work/src/$name-src"
-            GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=android GOARCH=$goarch GOARM=$goarm \
+            GOTOOLCHAIN=local CGO_ENABLED=1 GOOS=android GOARCH=$goarch GOARM=$goarm \
+            CC="$cc" \
             GOFLAGS=-mod=mod \
             GOPATH="$work/gopath" GOCACHE="$work/gocache" GOMODCACHE="$work/gomodcache" \
             PATH="$GOROOT/bin:$PATH" GOROOT="$GOROOT" \
@@ -379,6 +385,9 @@ build_go_plugin() {
 }
 
 build_plugins() {
+    plugin_api=$(pin amneziawg androidApi)
+    plugin_ndk=$(find_ndk "$(pin amneziawg ndkVersion)")
+    llvm="$plugin_ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
     log "protocol helpers (mieru, xray, olcrtc)"
     build_go_plugin mieru
     build_go_plugin xray
@@ -398,16 +407,19 @@ build_olcrtc() {
     so=$(pin plugins olcrtc soName)
     for abi in armeabi-v7a arm64-v8a x86 x86_64; do
         case $abi in
-            armeabi-v7a) goarch=arm;   goarm=7 ;;
-            arm64-v8a)   goarch=arm64; goarm=  ;;
-            x86)         goarch=386;   goarm=  ;;
-            x86_64)      goarch=amd64; goarm=  ;;
+            armeabi-v7a) goarch=arm;   goarm=7; target=armv7a-linux-androideabi ;;
+            arm64-v8a)   goarch=arm64; goarm=;  target=aarch64-linux-android ;;
+            x86)         goarch=386;   goarm=;  target=i686-linux-android ;;
+            x86_64)      goarch=amd64; goarm=;  target=x86_64-linux-android ;;
         esac
+        cc="$llvm/${target}${plugin_api}-clang"
+        [ -x "$cc" ] || die "NDK has no compiler for $abi at $cc"
         out="$root/app/src/main/jniLibs/$abi"
         mkdir -p "$out"
         (
             cd "$work/src/olcrtc-src"
-            GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=android GOARCH=$goarch GOARM=$goarm \
+            GOTOOLCHAIN=local CGO_ENABLED=1 GOOS=android GOARCH=$goarch GOARM=$goarm \
+            CC="$cc" \
             GOFLAGS=-mod=mod \
             GOPATH="$work/gopath" GOCACHE="$work/gocache" GOMODCACHE="$work/gomodcache" \
             PATH="$GOROOT/bin:$PATH" GOROOT="$GOROOT" \
