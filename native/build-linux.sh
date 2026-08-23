@@ -339,6 +339,9 @@ install_plugin_go() {
 # One Go helper, cross-compiled for Android. CGO stays off: these are ordinary
 # executables shipped as lib*.so, and a pure-Go binary needs no NDK toolchain
 # and links nothing from the platform.
+# The ABI a Go helper is built for is set by GOARCH alone: these are plain binaries,
+# no cgo, no NDK. Building all four costs a few minutes and spares anyone not on arm64
+# from being told the protocol has no build for their device.
 build_go_plugin() {
     name=$1
     printf '   %s\n' "$name"
@@ -352,19 +355,27 @@ build_go_plugin() {
     package=$(pin plugins "$name" source package)
     so=$(pin plugins "$name" soName)
 
-    out="$root/app/src/main/jniLibs/arm64-v8a"
-    mkdir -p "$out"
-    (
-        cd "$work/src/$name-src"
-        GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=android GOARCH=arm64 \
-        GOFLAGS=-mod=mod \
-        GOPATH="$work/gopath" GOCACHE="$work/gocache" GOMODCACHE="$work/gomodcache" \
-        PATH="$GOROOT/bin:$PATH" GOROOT="$GOROOT" \
-            "$GOROOT/bin/go" build -trimpath \
-                -ldflags "-s -w -checklinkname=0" \
-                -o "$out/$so" "$package"
-    )
-    [ -s "$out/$so" ] || die "$name produced no binary"
+    for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+        case $abi in
+            armeabi-v7a) goarch=arm;   goarm=7 ;;
+            arm64-v8a)   goarch=arm64; goarm=  ;;
+            x86)         goarch=386;   goarm=  ;;
+            x86_64)      goarch=amd64; goarm=  ;;
+        esac
+        out="$root/app/src/main/jniLibs/$abi"
+        mkdir -p "$out"
+        (
+            cd "$work/src/$name-src"
+            GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=android GOARCH=$goarch GOARM=$goarm \
+            GOFLAGS=-mod=mod \
+            GOPATH="$work/gopath" GOCACHE="$work/gocache" GOMODCACHE="$work/gomodcache" \
+            PATH="$GOROOT/bin:$PATH" GOROOT="$GOROOT" \
+                "$GOROOT/bin/go" build -trimpath \
+                    -ldflags "-s -w -checklinkname=0" \
+                    -o "$out/$so" "$package"
+        )
+        [ -s "$out/$so" ] || die "$name produced no binary for $abi"
+    done
 }
 
 build_plugins() {
@@ -372,7 +383,7 @@ build_plugins() {
     build_go_plugin mieru
     build_go_plugin xray
     build_olcrtc
-    printf '   -> app/src/main/jniLibs/arm64-v8a/\n'
+    printf '   -> app/src/main/jniLibs/<abi>/\n'
     printf '   note: NaiveProxy is not built here; it is a Chromium fork\n'
 }
 
@@ -384,18 +395,28 @@ build_olcrtc() {
         "$(pin plugins olcrtc go linuxAmd64 url)" \
         "$(pin plugins olcrtc go linuxAmd64 sha256)"
     unpack olcrtc-src "$(pin plugins olcrtc archive)" "$(pin plugins olcrtc sha256)"
-    out="$root/app/src/main/jniLibs/arm64-v8a"
-    mkdir -p "$out"
-    (
-        cd "$work/src/olcrtc-src"
-        GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=android GOARCH=arm64 \
-        GOFLAGS=-mod=mod \
-        GOPATH="$work/gopath" GOCACHE="$work/gocache" GOMODCACHE="$work/gomodcache" \
-        PATH="$GOROOT/bin:$PATH" GOROOT="$GOROOT" \
-            "$GOROOT/bin/go" build -trimpath \
-                -ldflags "-s -w -checklinkname=0" \
-                -o "$out/$(pin plugins olcrtc soName)" ./cmd/olcrtc
-    )
+    so=$(pin plugins olcrtc soName)
+    for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+        case $abi in
+            armeabi-v7a) goarch=arm;   goarm=7 ;;
+            arm64-v8a)   goarch=arm64; goarm=  ;;
+            x86)         goarch=386;   goarm=  ;;
+            x86_64)      goarch=amd64; goarm=  ;;
+        esac
+        out="$root/app/src/main/jniLibs/$abi"
+        mkdir -p "$out"
+        (
+            cd "$work/src/olcrtc-src"
+            GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=android GOARCH=$goarch GOARM=$goarm \
+            GOFLAGS=-mod=mod \
+            GOPATH="$work/gopath" GOCACHE="$work/gocache" GOMODCACHE="$work/gomodcache" \
+            PATH="$GOROOT/bin:$PATH" GOROOT="$GOROOT" \
+                "$GOROOT/bin/go" build -trimpath \
+                    -ldflags "-s -w -checklinkname=0" \
+                    -o "$out/$so" ./cmd/olcrtc
+        )
+        [ -s "$out/$so" ] || die "olcrtc produced no binary for $abi"
+    done
 }
 
 case "$target" in
