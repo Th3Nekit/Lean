@@ -24,7 +24,7 @@ Builds:
       - apt-get install -y patch
     gradle:
       - foss
-    build: sh ../native/build-linux.sh
+    build: LEAN_ABIS=armeabi-v7a sh ../native/build-linux.sh
     ndk: r25
     gradleprops:
       - abiFilter=armeabi-v7a
@@ -38,7 +38,7 @@ Builds:
       - apt-get install -y patch
     gradle:
       - foss
-    build: sh ../native/build-linux.sh
+    build: LEAN_ABIS=arm64-v8a sh ../native/build-linux.sh
     ndk: r25
     gradleprops:
       - abiFilter=arm64-v8a
@@ -52,7 +52,7 @@ Builds:
       - apt-get install -y patch
     gradle:
       - foss
-    build: sh ../native/build-linux.sh
+    build: LEAN_ABIS=x86 sh ../native/build-linux.sh
     ndk: r25
     gradleprops:
       - abiFilter=x86
@@ -66,7 +66,7 @@ Builds:
       - apt-get install -y patch
     gradle:
       - foss
-    build: sh ../native/build-linux.sh
+    build: LEAN_ABIS=x86_64 sh ../native/build-linux.sh
     ndk: r25
     gradleprops:
       - abiFilter=x86_64

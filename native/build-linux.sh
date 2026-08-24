@@ -33,6 +33,20 @@ lock="$here/versions.lock"
 work="${LEAN_NATIVE_WORK:-$root/.native-work}"
 target="${1:-all}"
 
+# Which ABIs to build. Space-separated; unset means all four.
+#
+#   LEAN_ABIS=arm64-v8a ./native/build-linux.sh
+#
+# F-Droid builds this app once per ABI, and without this each of those four runs
+# compiled all four architectures.
+abis="${LEAN_ABIS:-armeabi-v7a arm64-v8a x86 x86_64}"
+for _a in $abis; do
+    case $_a in
+        armeabi-v7a|arm64-v8a|x86|x86_64) ;;
+        *) die "unknown ABI in LEAN_ABIS: $_a" ;;
+    esac
+done
+
 log() { printf '\n== %s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
@@ -233,6 +247,16 @@ build_neko() {
     ( cd "$work/src/gomobile" && go install ./cmd/gomobile ./cmd/gobind )
 
     log "gomobile bind"
+    # gomobile takes its own target list, so an AAR for one ABI is asked for here
+    # rather than built in full and stripped later.
+    targets=$(for a in $abis; do
+        case $a in
+            armeabi-v7a) printf 'android/arm,' ;;
+            arm64-v8a)   printf 'android/arm64,' ;;
+            x86)         printf 'android/386,' ;;
+            x86_64)      printf 'android/amd64,' ;;
+        esac
+    done | sed 's/,$//')
     tags=$(python3 -c "import json;print(','.join(json.load(open('$lock'))['build']['tags']))")
     jar=$(ensure_platform "$(pin toolchain androidCompileSdk)")
 
@@ -241,6 +265,7 @@ build_neko() {
     export ANDROID_NDK_HOME="$ndk"
     ( cd "$work/src/neko/libcore" \
         && "$GOPATH/bin/gomobile" bind -v \
+             -target="$targets" \
              -androidapi "$api" \
              -bootclasspath "$jar" \
              -trimpath \
@@ -294,7 +319,7 @@ build_awg() {
 
     llvm="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
     out="$root/native/amneziawg/generated/jni"
-    for abi in $(python3 -c "import json;print(' '.join(json.load(open('$lock'))['amneziawg']['abis']))"); do
+    for abi in $abis; do
         case $abi in
             armeabi-v7a) goarch=arm;   goarm=7; target=armv7a-linux-androideabi ;;
             arm64-v8a)   goarch=arm64; goarm=;  target=aarch64-linux-android ;;
@@ -358,7 +383,7 @@ build_go_plugin() {
     package=$(pin plugins "$name" source package)
     so=$(pin plugins "$name" soName)
 
-    for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+    for abi in $abis; do
         case $abi in
             armeabi-v7a) goarch=arm;   goarm=7; target=armv7a-linux-androideabi ;;
             arm64-v8a)   goarch=arm64; goarm=;  target=aarch64-linux-android ;;
@@ -405,7 +430,7 @@ build_olcrtc() {
         "$(pin plugins olcrtc go linuxAmd64 sha256)"
     unpack olcrtc-src "$(pin plugins olcrtc archive)" "$(pin plugins olcrtc sha256)"
     so=$(pin plugins olcrtc soName)
-    for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+    for abi in $abis; do
         case $abi in
             armeabi-v7a) goarch=arm;   goarm=7; target=armv7a-linux-androideabi ;;
             arm64-v8a)   goarch=arm64; goarm=;  target=aarch64-linux-android ;;
