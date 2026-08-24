@@ -51,7 +51,10 @@ val nativeBuild = tasks.register<Exec>("buildAmneziaWgNative") {
             .split(File.pathSeparator)
             .any { dir -> File(dir, "pwsh").canExecute() || File(dir, "pwsh.exe").canExecute() }
         if (haveTool) return@onlyIf true
-        val built = nativeOutput.asFile.resolve("arm64-v8a/libwg-go.so").isFile
+        // Any ABI will do. A build that asked for one architecture through LEAN_ABIS
+        // produces exactly that one, and naming arm64 here failed the other three.
+        val built = nativeOutput.asFile.listFiles()
+            ?.any { File(it, "libwg-go.so").isFile } == true
         check(built) {
             "PowerShell is not available and native/amneziawg/generated/jni is empty. " +
                 "Run native/build-linux.sh before Gradle on a host without pwsh."
