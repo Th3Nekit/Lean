@@ -44,7 +44,7 @@ object Http {
      * silent truncation visible; confirm the contract with a live test account
      * and pin it here once known.
      */
-    @Volatile var sendHwid: Boolean = true
+    @Volatile var sendHwid: Boolean = false
 
     /** App version for x-app-version; set in LeanApp next to hwid/userAgent. */
     @Volatile var appVersion: String = ""

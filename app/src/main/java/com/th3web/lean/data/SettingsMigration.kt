@@ -45,6 +45,7 @@ internal object SettingsKeys {
     val AUTO_UPDATE = booleanPreferencesKey("auto_update_sub")
     val CHECK_APP_UPDATES = booleanPreferencesKey("check_app_updates")
     val SEND_HWID = booleanPreferencesKey("send_hwid")
+    val HWID_HINT_HIDDEN = booleanPreferencesKey("hwid_hint_hidden")
     val PING_PROTOCOL = stringPreferencesKey("ping_protocol")
     val PING_URL = stringPreferencesKey("ping_url")
     val PING_TIMEOUT = intPreferencesKey("ping_timeout")

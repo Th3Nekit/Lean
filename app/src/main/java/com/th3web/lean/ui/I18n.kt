@@ -308,6 +308,18 @@ internal val EN: Map<String, String> = mapOf(
     "Скоро" to "Coming soon",
     "Проверить пинг" to "Check ping",
     "Отменить проверку" to "Stop the check",
+    "В подписке «Приложение не поддерживается»?" to "Subscription says «App not supported»?",
+    "Если вместо серверов пришёл один с надписью «App not supported» или «Приложение не поддерживается» — панель не узнала устройство. Включите отправку HWID: Lean отправит ей идентификатор устройства, модель телефона и версию Android." to
+        "If the only server you got is called «App not supported», the panel did not recognise the device. Turn HWID on: Lean will send it a device identifier, the phone model and the Android version.",
+    "Включить HWID и обновить" to "Turn HWID on and refresh",
+    "Не надо" to "No thanks",
+    "Готово. Выключить можно в «Провайдер и пинг»." to
+        "Done. You can turn it off again under «Provider & ping».",
+    "Всё равно не удалось. Проверьте ссылку." to "Still no luck. Check the link.",
+    "Добавить подписку?" to "Add this subscription?",
+    "Ссылка получена из другого приложения." to "This link came from another app.",
+    "Ссылка получена из другого приложения.\n\nИсточник: %s" to
+        "This link came from another app.\n\nSource: %s",
     "Создать папку" to "New folder",
     "Новая папка" to "New folder",
     "Переименовать папку" to "Rename folder",

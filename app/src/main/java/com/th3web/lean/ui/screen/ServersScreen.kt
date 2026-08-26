@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +32,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -553,6 +555,27 @@ fun ServersScreen(onBack: () -> Unit, onNavigate: (String) -> Unit = {}) {
             if (showBanner) {
                 item(key = "telegram-promo", contentType = "promo") {
                     TelegramPromoBanner(onClick = { context.openUrl(TELEGRAM_BOT_URL) })
+                    Spacer(Modifier.height(12.dp))
+                }
+            }
+
+            // First on the screen: someone whose panel answered with a placeholder
+            // server is looking at the top of this list, not scrolling past the search
+            // and the sort chips to find out why.
+            if (!settings.sendHwid && !settings.hwidHintHidden) {
+                item(key = "hwid-hint", contentType = "hint") {
+                    HwidHintCard(
+                        onEnable = {
+                            scope.launch {
+                                app.settings.setSendHwid(true)
+                                store.subscriptions.forEach { s ->
+                                    runCatching { app.profiles.updateSubscription(s.id) }
+                                }
+                            }
+                            toast(tr("Готово. Выключить можно в «Провайдер и пинг»."))
+                        },
+                        onDismiss = { scope.launch { app.settings.setHwidHintHidden(true) } },
+                    )
                     Spacer(Modifier.height(12.dp))
                 }
             }
@@ -1889,5 +1912,61 @@ private fun FolderCard(
             tint = LeanColors.TextTertiary,
             modifier = Modifier.size(16.dp).rotate(chevron),
         )
+    }
+}
+
+/**
+ * The one place the device id is offered, and the only warning on this screen.
+ *
+ * Lean sends no hardware id, phone model or Android version to a subscription host
+ * unless asked to. Some panels only hand out the real list to a device they recognise,
+ * and what arrives instead is a single server called "App not supported" — which reads
+ * as Lean being broken. Detecting that placeholder is guesswork (every panel words it
+ * differently, in whatever language), so the notice simply states the case and quotes
+ * the wording people see. Error colours because it explains a fault, not a feature.
+ */
+@Composable
+private fun HwidHintCard(onEnable: () -> Unit, onDismiss: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(LeanCorner.Card)
+            .background(scheme.errorContainer)
+            .border(1.dp, scheme.error, LeanCorner.Card)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Text(
+            tr("В подписке «Приложение не поддерживается»?"),
+            style = LeanType.rowTitle,
+            color = scheme.onErrorContainer,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            tr("Если вместо серверов пришёл один с надписью «App not supported» или " +
+                "«Приложение не поддерживается» — панель не узнала устройство. Включите " +
+                "отправку HWID: Lean отправит ей идентификатор устройства, модель " +
+                "телефона и версию Android."),
+            style = LeanType.meta,
+            color = scheme.onErrorContainer,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Button(
+                onClick = onEnable,
+                shape = MaterialTheme.shapes.medium,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = scheme.error,
+                    contentColor = scheme.onError,
+                ),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+            ) {
+                Text(tr("Включить HWID и обновить"), style = LeanType.meta)
+            }
+            Spacer(Modifier.width(8.dp))
+            TextButton(onClick = onDismiss) {
+                Text(tr("Не надо"), style = LeanType.meta, color = scheme.onErrorContainer)
+            }
+        }
     }
 }

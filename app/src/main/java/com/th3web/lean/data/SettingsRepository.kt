@@ -80,13 +80,22 @@ data class Settings(
      * exposes at all. So the warning could not be got rid of by doing what it asked.
      */
     val batteryWarningHidden: Boolean = false,
+    /** «Панель выдала не те серверы?» dismissed for good. */
+    val hwidHintHidden: Boolean = false,
     val mux: Boolean = false,
     val fragment: Boolean = false,
     val autoUpdate: Boolean = false,
     /** Check the public release repo for a newer app build on launch (APK, not subscription). */
     val checkAppUpdates: Boolean = true,
-    /** Send the x-hwid header quartet with subscription requests (Incy `send_hwid`). */
-    val sendHwid: Boolean = true,
+    /**
+     * Send the x-hwid header quartet with subscription requests.
+     *
+     * Off by default: a hardware id, the OS version and the phone model go to whoever
+     * owns the subscription link, and that should be a decision rather than a surprise.
+     * Panels that bind a subscription to a device need it, so a subscription that comes
+     * back empty offers to turn it on right there (see SubscriptionCard).
+     */
+    val sendHwid: Boolean = false,
     val pingProtocol: String = SettingsDefaults.PING_PROTOCOL, // TCP | ICMP | GET | HEAD | URLTEST
     val pingUrl: String = SettingsDefaults.TEST_URL,
     val pingTimeoutMs: Int = SettingsDefaults.PROFILE_TEST_TIMEOUT_MS,
@@ -374,11 +383,12 @@ class SettingsRepository(
             killSwitch = p[SettingsKeys.KILL_SWITCH] ?: false,
             dozePause = p[SettingsKeys.DOZE_PAUSE] ?: false,
             batteryWarningHidden = p[SettingsKeys.BATTERY_WARNING_HIDDEN] ?: false,
+            hwidHintHidden = p[SettingsKeys.HWID_HINT_HIDDEN] ?: false,
             mux = p[SettingsKeys.MUX] ?: false,
             fragment = p[SettingsKeys.FRAGMENT] ?: false,
             autoUpdate = p[SettingsKeys.AUTO_UPDATE] ?: false,
             checkAppUpdates = p[SettingsKeys.CHECK_APP_UPDATES] ?: true,
-            sendHwid = p[SettingsKeys.SEND_HWID] ?: true,
+            sendHwid = p[SettingsKeys.SEND_HWID] ?: false,
             pingProtocol = p[SettingsKeys.PING_PROTOCOL] ?: SettingsDefaults.PING_PROTOCOL,
             pingUrl = p[SettingsKeys.PING_URL] ?: SettingsDefaults.TEST_URL,
             pingTimeoutMs = p[SettingsKeys.PING_TIMEOUT] ?: SettingsDefaults.PROFILE_TEST_TIMEOUT_MS,
@@ -554,6 +564,9 @@ class SettingsRepository(
     suspend fun setAutoUpdate(value: Boolean) = edit { it[SettingsKeys.AUTO_UPDATE] = value }
     suspend fun setCheckAppUpdates(value: Boolean) = edit { it[SettingsKeys.CHECK_APP_UPDATES] = value }
     suspend fun setSendHwid(value: Boolean) = edit { it[SettingsKeys.SEND_HWID] = value }
+
+    suspend fun setHwidHintHidden(value: Boolean) =
+        edit { it[SettingsKeys.HWID_HINT_HIDDEN] = value }
     suspend fun setPingProtocol(value: String) = edit { it[SettingsKeys.PING_PROTOCOL] = value }
     suspend fun setPingUrl(value: String) = edit { it[SettingsKeys.PING_URL] = value }
     suspend fun setPingTimeout(value: Int) = edit { it[SettingsKeys.PING_TIMEOUT] = value }
@@ -779,6 +792,7 @@ class SettingsRepository(
             p[SettingsKeys.KILL_SWITCH] = s.killSwitch
             p[SettingsKeys.DOZE_PAUSE] = s.dozePause
             p[SettingsKeys.BATTERY_WARNING_HIDDEN] = s.batteryWarningHidden
+            p[SettingsKeys.HWID_HINT_HIDDEN] = s.hwidHintHidden
             p[SettingsKeys.MUX] = s.mux
             p[SettingsKeys.FRAGMENT] = s.fragment
             p[SettingsKeys.AUTO_UPDATE] = s.autoUpdate

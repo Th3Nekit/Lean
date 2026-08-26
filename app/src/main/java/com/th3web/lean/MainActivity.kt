@@ -16,17 +16,18 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.lifecycle.lifecycleScope
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import com.th3web.lean.core.Automation
 import com.th3web.lean.core.CoreManager
 import com.th3web.lean.core.UrlTestPinger
@@ -44,6 +45,9 @@ import com.th3web.lean.ui.theme.appearanceSpec
 import com.th3web.lean.ui.theme.nightWindowNow
 import com.th3web.lean.ui.theme.wallpaperSeedOrNull
 import com.th3web.lean.ui.tr
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -339,17 +343,47 @@ class MainActivity : ComponentActivity() {
                 // subscription via the existing repository API on a coroutine,
                 // then confirms with a Toast. A missing/blank url no-ops (the
                 // parser already returns null), so a malformed link is harmless.
+                // Confirmed first, and the host is named in the question: the link
+                // came from somewhere else, and tapping one should not be the same as
+                // agreeing to fetch from whatever server it points at.
                 val importReq = deepLinkImport
-                LaunchedEffect(importReq) {
-                    if (importReq == null) return@LaunchedEffect
-                    // Repository signature is addSubscription(name, url), name first.
-                    val result = LeanApp.instance.profiles.addSubscription(importReq.name, importReq.url)
-                    val msg = result.fold(
-                        onSuccess = { count -> tr("Подписка добавлена: %d серверов").format(count) },
-                        onFailure = { tr("Не удалось импортировать подписку") },
+                if (importReq != null) {
+                    val host = remember(importReq.url) {
+                        runCatching { Uri.parse(importReq.url).host }.getOrNull().orEmpty()
+                    }
+                    val scope = rememberCoroutineScope()
+                    AlertDialog(
+                        onDismissRequest = { deepLinkImport = null },
+                        title = { Text(tr("Добавить подписку?")) },
+                        text = {
+                            Text(
+                                if (host.isBlank()) {
+                                    tr("Ссылка получена из другого приложения.")
+                                } else {
+                                    tr("Ссылка получена из другого приложения.\n\nИсточник: %s").format(host)
+                                },
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                deepLinkImport = null
+                                scope.launch {
+                                    val result = LeanApp.instance.profiles
+                                        .addSubscription(importReq.name, importReq.url)
+                                    val msg = result.fold(
+                                        onSuccess = { count ->
+                                            tr("Подписка добавлена: %d серверов").format(count)
+                                        },
+                                        onFailure = { tr("Не удалось импортировать подписку") },
+                                    )
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                }
+                            }) { Text(tr("Добавить")) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { deepLinkImport = null }) { Text(tr("Отмена")) }
+                        },
                     )
-                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                    deepLinkImport = null // consume AFTER the import is dispatched
                 }
 
                 Box {
