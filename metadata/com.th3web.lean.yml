@@ -15,9 +15,9 @@ RepoType: git
 Repo: https://github.com/Th3Nekit/Lean.git
 
 Builds:
-  - versionName: 1.1.4
-    versionCode: 351
-    commit: a6f1a7883c3e0e9e44d8ed4d60d5a5a346ea0d35
+  - versionName: 1.2.0
+    versionCode: 361
+    commit: b307c10490c6b5e0259143a9c3b142cf940c3e94
     subdir: app
     sudo:
       - apt-get update
@@ -29,9 +29,9 @@ Builds:
     gradleprops:
       - abiFilter=armeabi-v7a
 
-  - versionName: 1.1.4
-    versionCode: 352
-    commit: a6f1a7883c3e0e9e44d8ed4d60d5a5a346ea0d35
+  - versionName: 1.2.0
+    versionCode: 362
+    commit: b307c10490c6b5e0259143a9c3b142cf940c3e94
     subdir: app
     sudo:
       - apt-get update
@@ -43,9 +43,9 @@ Builds:
     gradleprops:
       - abiFilter=arm64-v8a
 
-  - versionName: 1.1.4
-    versionCode: 353
-    commit: a6f1a7883c3e0e9e44d8ed4d60d5a5a346ea0d35
+  - versionName: 1.2.0
+    versionCode: 363
+    commit: b307c10490c6b5e0259143a9c3b142cf940c3e94
     subdir: app
     sudo:
       - apt-get update
@@ -57,9 +57,9 @@ Builds:
     gradleprops:
       - abiFilter=x86
 
-  - versionName: 1.1.4
-    versionCode: 354
-    commit: a6f1a7883c3e0e9e44d8ed4d60d5a5a346ea0d35
+  - versionName: 1.2.0
+    versionCode: 364
+    commit: b307c10490c6b5e0259143a9c3b142cf940c3e94
     subdir: app
     sudo:
       - apt-get update
@@ -78,5 +78,5 @@ VercodeOperation:
   - 10 * %c + 2
   - 10 * %c + 3
   - 10 * %c + 4
-CurrentVersion: 1.1.4
-CurrentVersionCode: 354
+CurrentVersion: 1.2.0
+CurrentVersionCode: 364

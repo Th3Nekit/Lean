@@ -12,6 +12,15 @@ object Routes {
     const val SETTINGS = "settings"
 
     const val LOGS = "logs"
+
+    /** «Скорость» — the speed test, pushed from Home's top bar. */
+    const val SPEEDTEST = "speedtest"
+
+    /** «Что работает сейчас» — per-service reachability, pushed from Home. */
+    const val SERVICES = "services"
+
+    /** «Почему не работает» — the DPI probes and the settings they imply. */
+    const val DIAGNOSTICS = "diagnostics"
     /** Builder for an olcRTC server, the one protocol with no host:port to type. */
     const val OLCRTC_NEW = "servers/olcrtc/new"
     const val ABOUT = "about"

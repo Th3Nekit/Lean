@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
+import com.th3web.lean.BuildConfig
 import com.th3web.lean.data.net.CrashReporter
 
 @JvmInline
@@ -71,6 +72,27 @@ data class Settings(
      */
     val dozePause: Boolean = false,
     /**
+     * «Не давать системе усыплять туннель» — hold a partial wake lock while a tunnel is
+     * up (see [com.th3web.lean.core.TunnelWakeLock]).
+     *
+     * On by default, which is a trade stated plainly: it costs battery, and what it buys
+     * is the tunnel still being there when the phone is picked up. Without it the core's
+     * own clockwork (keepalives, rekeys, heartbeats) is coalesced into Doze maintenance
+     * windows minutes apart, the far end sees a peer that stopped answering and closes
+     * the session, and the user finds a VPN that switched itself off — the single most
+     * reported fault in the app.
+     */
+    val wakeLock: Boolean = true,
+    /**
+     * «Восстанавливать соединение само» — the idle health probe and its escalation
+     * (see [com.th3web.lean.core.TunnelHealthCheck]).
+     *
+     * On by default: it only acts on a tunnel that has gone silent and then failed a
+     * real request through itself, and the alternative is a phone that carries nothing
+     * until its owner notices.
+     */
+    val autoRecover: Boolean = true,
+    /**
      * The user has dismissed the «Система может усыпить Lean» card by hand.
      *
      * Needed because the system's own answer cannot be trusted everywhere:
@@ -85,8 +107,15 @@ data class Settings(
     val mux: Boolean = false,
     val fragment: Boolean = false,
     val autoUpdate: Boolean = false,
-    /** Check the public release repo for a newer app build on launch (APK, not subscription). */
-    val checkAppUpdates: Boolean = true,
+    /**
+     * Check the public release repo for a newer app build on launch (APK, not subscription).
+     *
+     * Per flavour, not a flat `true`: the `foss` build goes to F-Droid, which does its own
+     * update handling, so a launch-time call to api.github.com there is an outgoing
+     * contact nobody asked for (and it happened on the very first launch, before any
+     * screen was shown). See BuildConfig.UPDATE_CHECK_DEFAULT in app/build.gradle.kts.
+     */
+    val checkAppUpdates: Boolean = BuildConfig.UPDATE_CHECK_DEFAULT,
     /**
      * Send the x-hwid header quartet with subscription requests.
      *
@@ -382,12 +411,14 @@ class SettingsRepository(
             logLevel = AppearanceNorm.logLevel(p[SettingsKeys.LOG_LEVEL]),
             killSwitch = p[SettingsKeys.KILL_SWITCH] ?: false,
             dozePause = p[SettingsKeys.DOZE_PAUSE] ?: false,
+            wakeLock = p[SettingsKeys.WAKE_LOCK] ?: true,
+            autoRecover = p[SettingsKeys.AUTO_RECOVER] ?: true,
             batteryWarningHidden = p[SettingsKeys.BATTERY_WARNING_HIDDEN] ?: false,
             hwidHintHidden = p[SettingsKeys.HWID_HINT_HIDDEN] ?: false,
             mux = p[SettingsKeys.MUX] ?: false,
             fragment = p[SettingsKeys.FRAGMENT] ?: false,
             autoUpdate = p[SettingsKeys.AUTO_UPDATE] ?: false,
-            checkAppUpdates = p[SettingsKeys.CHECK_APP_UPDATES] ?: true,
+            checkAppUpdates = p[SettingsKeys.CHECK_APP_UPDATES] ?: BuildConfig.UPDATE_CHECK_DEFAULT,
             sendHwid = p[SettingsKeys.SEND_HWID] ?: false,
             pingProtocol = p[SettingsKeys.PING_PROTOCOL] ?: SettingsDefaults.PING_PROTOCOL,
             pingUrl = p[SettingsKeys.PING_URL] ?: SettingsDefaults.TEST_URL,
@@ -557,6 +588,8 @@ class SettingsRepository(
     suspend fun setLogLevel(value: String) = edit { it[SettingsKeys.LOG_LEVEL] = value }
     suspend fun setKillSwitch(value: Boolean) = edit { it[SettingsKeys.KILL_SWITCH] = value }
     suspend fun setDozePause(value: Boolean) = edit { it[SettingsKeys.DOZE_PAUSE] = value }
+    suspend fun setWakeLock(value: Boolean) = edit { it[SettingsKeys.WAKE_LOCK] = value }
+    suspend fun setAutoRecover(value: Boolean) = edit { it[SettingsKeys.AUTO_RECOVER] = value }
     suspend fun setBatteryWarningHidden(value: Boolean) =
         edit { it[SettingsKeys.BATTERY_WARNING_HIDDEN] = value }
     suspend fun setMux(value: Boolean) = edit { it[SettingsKeys.MUX] = value }
@@ -791,6 +824,8 @@ class SettingsRepository(
             p[SettingsKeys.LOG_LEVEL] = s.logLevel
             p[SettingsKeys.KILL_SWITCH] = s.killSwitch
             p[SettingsKeys.DOZE_PAUSE] = s.dozePause
+            p[SettingsKeys.WAKE_LOCK] = s.wakeLock
+            p[SettingsKeys.AUTO_RECOVER] = s.autoRecover
             p[SettingsKeys.BATTERY_WARNING_HIDDEN] = s.batteryWarningHidden
             p[SettingsKeys.HWID_HINT_HIDDEN] = s.hwidHintHidden
             p[SettingsKeys.MUX] = s.mux

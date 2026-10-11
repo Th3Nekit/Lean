@@ -1,0 +1,27 @@
+"Speed" — a speed test inside the app: download, upload, latency and jitter.
+While the VPN is on it can measure twice against one and the same server, through
+the tunnel and around it, so the difference is what the tunnel actually costs.
+Inside Russia the target comes from a built-in list, because Speedtest's own
+directory is blocked there.
+
+"What works right now" — a reachability check of the services themselves:
+YouTube, Telegram, Discord, ChatGPT, Steam and the rest, one by one, with an
+answer for each.
+
+"Why it does not work" — DPI probes: what exactly breaks the connection (SNI,
+outbound UDP, DNS forgery, teardown under load) and which settings follow from
+that.
+
+"Keep the system from sleeping the tunnel" — on by default. The most reported
+fault was "the VPN switched itself off": in deep sleep the core could not answer
+the far end in time and the session was closed. The tunnel now keeps ticking, at
+the price of battery.
+
+"Recover the connection by itself" — when a tunnel goes silent and then fails a
+real request made through it, the app resets connections and DNS and reconnects.
+Outages are written to a log.
+
+The F-Droid build no longer contacts api.github.com on launch: F-Droid does its
+own update checking, and the manual check button stays in both builds.
+
+This build has no promotion of the author's paid service in it.

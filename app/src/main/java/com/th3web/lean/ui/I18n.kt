@@ -844,4 +844,149 @@ internal val EN: Map<String, String> = mapOf(
     "Ключ — ровно 64 hex-символа. Сейчас: %d." to "The key is exactly 64 hex characters. Currently %d.",
     "Необязательно" to "Optional",
     "Сохранить сервер" to "Save server",
+
+    // ---- «Что работает сейчас» + «Почему не работает» ----
+    "Что работает" to "What works",
+    "Что работает сейчас" to "What works right now",
+    "Проверяю сервисы…" to "Checking services…",
+    "Работает %d из %d" to "%d of %d work",
+    "Замер без VPN: это то, что открывается напрямую." to
+        "Measured without the VPN: this is what opens directly.",
+    "%d только через VPN, %d ломается в туннеле." to
+        "%d only through the VPN, %d broken by the tunnel.",
+    "%d из них открывается только через VPN." to "%d of them open only through the VPN.",
+    "%d ломается именно в туннеле — смените сервер." to
+        "%d is broken by the tunnel itself — switch servers.",
+    "Туннель ничего не ломает и ничего не чинит: всё открывается и так." to
+        "The tunnel neither breaks nor fixes anything: it all opens anyway.",
+    "проверяю…" to "checking…",
+    "не проверялось" to "not checked",
+    "открывается" to "opens",
+    "работает и так, и через VPN" to "works with and without the VPN",
+    "только через VPN" to "only through the VPN",
+    "ломается в туннеле" to "broken by the tunnel",
+    "недоступно" to "unreachable",
+    "Почему не работает" to "Why it does not work",
+    "Измерить, что делает провайдер, и подобрать настройки" to
+        "Measure what the provider does, then pick the settings",
+    "Проверка идёт по обычной сети, минуя туннель" to
+        "The check runs over the plain network, bypassing the tunnel",
+    "Так видно, что именно делает провайдер: рвёт TLS по имени, глушит UDP, подменяет DNS или обрывает соединение на объёме. VPN выключать не нужно." to
+        "That shows what the provider actually does: tears TLS down by name, drops UDP, forges DNS or cuts the connection once data flows. No need to turn the VPN off.",
+    "Проверить сеть" to "Check the network",
+    "Проверить снова" to "Check again",
+    "Что измерено" to "What was measured",
+    "Что делать" to "What to do",
+    "Применить рекомендации" to "Apply the recommendations",
+    "Настройки применены — переподключитесь, чтобы они вступили в силу." to
+        "Settings applied — reconnect for them to take effect.",
+    "Выход в сеть" to "Internet access",
+    "Фильтр по имени сайта (SNI)" to "Filtering by site name (SNI)",
+    "UDP наружу" to "Outbound UDP",
+    "Подмена DNS" to "DNS forgery",
+    "Обрыв на объёме (ТСПУ)" to "Teardown under load (TSPU)",
+
+    // ---- «Скорость» (SpeedTest) ----
+    "Скорость" to "Speed",
+    "Гбит/с" to "Gbit/s",
+    "ближайший по отклику" to "lowest latency",
+    "км" to "km",
+    "авто" to "auto",
+    "Ищу ближайший сервер…" to "Finding the nearest server…",
+    "Ищу сервер…" to "Finding a server…",
+    "Сервер выберется автоматически" to "A server will be picked automatically",
+    "Замер идёт по серверам Speedtest в четыре потока." to
+        "The test runs against Speedtest servers over four streams.",
+    "Сервер подбирается по отклику, а в России берётся из встроенного списка — каталог Speedtest оттуда недоступен. Что мерить, решаешь выше: сравнение идёт по одному и тому же серверу, чтобы разница была про туннель, а не про расстояние. На мобильном тарифе один замер — это сотни мегабайт." to
+        "The server is chosen by latency, and inside Russia it comes from a built-in list — Speedtest's directory is blocked there. What gets measured is your choice above: a comparison uses one and the same server, so the difference is about the tunnel and not about distance. On a mobile plan one run is hundreds of megabytes.",
+    "Что мерить" to "What to measure",
+    "Куда мерить" to "Where to measure",
+    "В обход" to "Bypass",
+    "Сравнить" to "Compare",
+    "Один замер по тому пути, которым трафик идёт прямо сейчас." to
+        "One run over the path the traffic is taking right now.",
+    "Один замер в обход туннеля: что канал отдаёт без VPN." to
+        "One run around the tunnel: what the link carries without the VPN.",
+    "Два замера подряд, через туннель и в обход, по одному и тому же серверу. Времени и трафика уйдёт вдвое больше." to
+        "Two runs back to back, through the tunnel and around it, against one and the same server. Twice the time and twice the traffic.",
+    "Туннель выключен, так что мерить можно только саму сеть телефона. Включи VPN, и появится выбор: через туннель, в обход или оба замера для сравнения." to
+        "No tunnel is up, so the only thing to measure is the phone's own network. Turn the VPN on and the choice appears: through the tunnel, around it, or both for the comparison.",
+    "Мбит/с" to "Mbit/s",
+    "Запустить тест" to "Run test",
+    "Остановить" to "Stop",
+    "Готов к замеру" to "Ready to measure",
+    "Замер завершён" to "Measurement finished",
+    "Задержка…" to "Latency…",
+    "Приём…" to "Download…",
+    "Отдача…" to "Upload…",
+    "через туннель" to "through the tunnel",
+    "напрямую" to "direct",
+    "без туннеля" to "no tunnel",
+    "Приём" to "Download",
+    "Отдача" to "Upload",
+    "Задержка" to "Latency",
+    "Джиттер" to "Jitter",
+    "Через туннель" to "Through the tunnel",
+    "Напрямую" to "Direct",
+    "Потеря скорости" to "Speed lost",
+    "Быстрее через туннель" to "Faster through the tunnel",
+    "История" to "History",
+    "Очистить историю" to "Clear history",
+    "Приём, последние замеры" to "Download, recent runs",
+    "Замер без туннеля: это скорость самой сети телефона." to
+        "Measured with no tunnel: this is the phone's own network speed.",
+    "Замер в обход туннеля, по сети: %s" to "Measured around the tunnel, over %s",
+    "мобильная сеть" to "cellular",
+    "неизвестная сеть" to "unknown network",
+    "сеть под туннелем не найдена" to "no network found under the tunnel",
+    "Приём не измерен" to "Download not measured",
+    "Отдача не измерена" to "Upload not measured",
+    "сервер не отвечает" to "server is not answering",
+    "сервер отклонил запрос" to "server refused the request",
+    "TLS не прошёл" to "TLS failed",
+    "адрес не разрешается" to "name does not resolve",
+    "соединение отклонено" to "connection refused",
+    "нет данных" to "no data",
+    "Россия" to "Russia",
+
+    // ---- Устойчивость туннеля: wake lock, автовосстановление, журнал обрывов ----
+    "Не давать системе усыплять туннель" to "Keep the system from sleeping the tunnel",
+    "Надёжнее в фоне, но расход батареи выше" to "More reliable in the background, uses more battery",
+    "Восстанавливать соединение само" to "Recover the connection by itself",
+    "Проверяет туннель в простое и переподключает, если он замолчал" to
+        "Probes the tunnel while idle and reconnects it if it goes silent",
+    "⚠ проверка туннеля не прошла (%d подряд)" to "⚠ tunnel probe failed (%d in a row)",
+    "⚠ туннель молчит на проверках — сбрасываю соединения и DNS" to
+        "⚠ the tunnel is not answering probes — resetting connections and DNS",
+    "↻ сброс не помог — перезапускаю подключение" to
+        "↻ the reset did not help — restarting the connection",
+    "  причина обычно одна: другое VPN-приложение заняло туннель или сменился always-on VPN" to
+        "  usually one of two things: another VPN app took the tunnel, or always-on VPN changed",
+    "✖ подключение падало %d раз подряд — автозапуск остановлен, включите вручную" to
+        "✖ the connection failed %d times in a row — auto-start stopped, turn it on by hand",
+    "⚠ подключение падало %d раза подряд — повтор через %d с" to
+        "⚠ the connection failed %d times in a row — retrying in %d s",
+    "⚠ прошлая сессия оборвалась не по команде: «%s», продержалась %s" to
+        "⚠ the previous session ended without being asked to: \"%s\", it lasted %s",
+    "сервер не записан" to "server not recorded",
+    "⚠ прошлый процесс завершён: %s" to "⚠ the previous process ended: %s",
+    " (во время работы туннеля)" to " (while the tunnel was running)",
+    "системе не хватило памяти — приложение выгружено" to
+        "the system ran out of memory and unloaded the app",
+    "сбой приложения" to "an app crash",
+    "сбой в нативном ядре" to "a crash in the native core",
+    "приложение перестало отвечать (ANR)" to "the app stopped responding (ANR)",
+    "система сочла расход ресурсов чрезмерным" to "the system judged resource use excessive",
+    "приложение закрыли вручную или его закрыл «оптимизатор» производителя" to
+        "the app was closed by hand, or by the vendor's \"optimiser\"",
+    "процесс завершён сигналом извне (часто — экономия батареи производителя)" to
+        "the process was signalled from outside (often the vendor's battery saver)",
+    "завершился процесс, от которого мы зависели" to "a process we depended on ended",
+    "изменились разрешения приложения" to "the app's permissions changed",
+    "приложение не смогло запуститься" to "the app could not start",
+    "прочая причина, названная системой" to "another reason, as named by the system",
+    "причина не распознана (код %d)" to "reason not recognised (code %d)",
+    "неизвестно сколько" to "an unknown time",
+    "меньше минуты" to "less than a minute",
+    "%d ч %d мин" to "%d h %d min",
 )

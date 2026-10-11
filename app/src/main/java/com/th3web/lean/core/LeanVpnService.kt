@@ -108,8 +108,27 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
     /** «Спать в глубоком сне», read live so the switch takes effect at once. */
     @Volatile private var dozePauseEnabled: Boolean = false
 
+    /** «Не давать системе усыплять туннель», likewise read live. */
+    @Volatile private var wakeLockEnabled: Boolean = true
+
+    /** «Восстанавливать соединение само» — the idle health probe's own switch. */
+    @Volatile private var autoRecoverEnabled: Boolean = true
+
     /** Opt-in Doze pause of the core. See [DozePause] for what it costs. */
     private val dozePause = DozePause(box = { activeBox }, enabled = { dozePauseEnabled })
+
+    /**
+     * Keeps the CPU awake for as long as a tunnel is up, unless the user turned that off.
+     * The counterweight to [dozePause], and the fix for a tunnel that dies in a pocket.
+     */
+    private val tunnelWakeLock by lazy { TunnelWakeLock(this) { wakeLockEnabled } }
+
+    /**
+     * Says, on the next launch, why the previous session ended when nothing in the app
+     * ended it. Reads the system's own process-exit records, so «рандомный дисконнект»
+     * finally has an answer in the log instead of silence.
+     */
+    private val outageLog by lazy { TunnelOutageLog(this, servicePrefs) }
 
     private var idleReceiver: BroadcastReceiver? = null
     @Volatile private var activeUsesNeko = false
@@ -394,6 +413,24 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
     }
 
     /**
+     * Rebuilds the core for the profile that is live right now.
+     *
+     * The last rung of [TunnelHealthCheck]'s ladder: the tunnel failed repeated probes
+     * through itself and a connection reset did not revive it, so the core is replaced.
+     * restart = true because reconnecting to the profile you are already on is a
+     * deliberate no-op in the coordinator, which is exactly what this must not be.
+     *
+     * Guarded on the generation, so a probe whose verdict arrives after the user already
+     * switched servers (or disconnected) cannot resurrect the session they left.
+     */
+    private fun restartCurrentProfile(generation: Long) {
+        if (serviceDestroyed) return
+        if (!coordinator.isCurrentGeneration(generation)) return
+        val profileId = activeProfileId ?: return
+        coordinator.submit(DesiredConnection.Running(profileId = profileId, restart = true))
+    }
+
+    /**
      * Deletes the core's on-disk cache so the next start builds a fresh one.
      *
      * Called only after a start failure that carries bbolt's corruption wording (see
@@ -440,6 +477,9 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
         trimCoreLog()
+        // Before anything else this incarnation says: whatever ended the last session,
+        // named, while the log still begins where the user's complaint does.
+        runCatching { outageLog.reportPreviousOutage() }
         networkMonitor.start { network, transition ->
             val generation = activeGeneration
             if (generation != 0L) handleDefaultNetwork(generation, network, transition)
@@ -455,6 +495,23 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
                     // switch would look dead until the device next left Doze.
                     dozePause.settingChanged()
                 }
+        }
+        scope.launch {
+            LeanApp.instance.settings.flow
+                .map { it.wakeLock }
+                .distinctUntilChanged()
+                .collect { enabled ->
+                    wakeLockEnabled = enabled
+                    // Same reason as the Doze switch above: turning it off has to release
+                    // a lock that is held right now, not at the next disconnect.
+                    tunnelWakeLock.settingChanged()
+                }
+        }
+        scope.launch {
+            LeanApp.instance.settings.flow
+                .map { it.autoRecover }
+                .distinctUntilChanged()
+                .collect { autoRecoverEnabled = it }
         }
     }
 
@@ -539,6 +596,8 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
             }
             action == ACTION_PAUSE -> {
                 CoreManager.appendLog(tr("⏸ приостановлено"))
+                // Asked for, so nothing to explain on the next launch.
+                outageLog.sessionEndedCleanly()
                 // Stopping is a decision, not a failure: cancel any pending retry so the
                 // tunnel does not come back a few seconds after the user paused it.
                 resetFailover()
@@ -546,6 +605,7 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
             }
             else -> {
                 if (action == ACTION_STOP) CoreManager.appendLog(tr("■ Остановка подключения"))
+                outageLog.sessionEndedCleanly()
                 // Same reason as the pause branch: an explicit stop must not be undone
                 // by a retry that was already in flight.
                 resetFailover()
@@ -589,13 +649,38 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
             .putLong(KEY_LAST_SYSTEM_START, now)
             .putInt(KEY_SYSTEM_START_STREAK, streak)
             .apply()
-        if (streak > MAX_SYSTEM_START_STREAK) {
+        // Past the streak the restarts are backed off rather than abandoned.
+        //
+        // The old behaviour was a hard stop: after four system starts that never reached
+        // «подключено» the service gave up for good, and the user came back to a VPN that
+        // was simply off with one line in a log they had no reason to open. But the common
+        // cause of a kill-and-recreate loop is not a broken profile, it is memory
+        // pressure or a vendor battery layer, and both pass. Giving up permanently turns
+        // a passing condition into a dead tunnel that only a manual tap can revive.
+        //
+        // So the streak now buys a wait that doubles (30 s, 60 s, 2 min, 4 min…), and
+        // only [MAX_SYSTEM_START_STREAK_HARD] consecutive failures end it for good, which
+        // is the case where something really is broken and retrying forever would be a
+        // battery leak with a notification on top.
+        if (streak > MAX_SYSTEM_START_STREAK_HARD) {
             CoreManager.appendLog(
-                tr("✖ подключение падало %d раза подряд — автозапуск остановлен")
+                tr("✖ подключение падало %d раз подряд — автозапуск остановлен, включите вручную")
                     .format(streak - 1),
             )
+            outageLog.sessionEndedCleanly()
             stopSelf()
             return START_NOT_STICKY
+        }
+        val backoffMs = if (streak > MAX_SYSTEM_START_STREAK) {
+            SYSTEM_START_BACKOFF_BASE_MS shl (streak - MAX_SYSTEM_START_STREAK - 1).coerceAtMost(3)
+        } else {
+            0L
+        }
+        if (backoffMs > 0) {
+            CoreManager.appendLog(
+                tr("⚠ подключение падало %d раза подряд — повтор через %d с")
+                    .format(streak - 1, backoffMs / 1_000),
+            )
         }
         CoreManager.appendLog(tr("… Запуск подключения системой (always-on / восстановление)"))
         runCatching {
@@ -609,6 +694,13 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
         }
         resetFailover()
         scope.launch {
+            // The backoff waits HERE, not before startForeground: the notification has to
+            // be up within seconds of the service being created or the system kills it
+            // with ForegroundServiceDidNotStartInTimeException, so the wait belongs after
+            // it, on the connect itself. The user sees «Подключение…» for the interval,
+            // which is what is actually happening.
+            if (backoffMs > 0) delay(backoffMs)
+            if (serviceDestroyed) return@launch
             // The profile store loads synchronously in its constructor; settings do not.
             val settings = LeanApp.instance.settings.flow.first()
             val profiles = LeanApp.instance.profiles.state.value.profiles
@@ -627,6 +719,13 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
 
     override fun onRevoke() {
         CoreManager.appendLog(tr("⚠ VPN отозван системой"))
+        // Named here and now, so the next launch does not report it a second time as an
+        // unexplained outage: a revoke is almost always another VPN app taking the TUN,
+        // or «always-on VPN» being pointed elsewhere, and that is worth saying once.
+        CoreManager.appendLog(
+            tr("  причина обычно одна: другое VPN-приложение заняло туннель или сменился always-on VPN"),
+        )
+        outageLog.sessionEndedCleanly()
         if (!serviceDestroyed) coordinator.submit(DesiredConnection.Stopped)
     }
 
@@ -659,6 +758,9 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
         }
         runCatching { networkMonitor.close() }
         runCatching { tunController.close() }
+        // Unconditional, like the releases around it: a wake lock outliving the service
+        // would hold the CPU awake with nothing left to keep alive.
+        runCatching { tunnelWakeLock.sessionStopped() }
         scope.cancel()
         super.onDestroy()
     }
@@ -820,6 +922,10 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
             box = box,
             profiles = config.profiles,
             cacheDir = cacheDir,
+            healthCheckEnabled = { autoRecoverEnabled },
+            // A paused core carries nothing on purpose, so its silence is not a fault.
+            corePaused = { dozePause.paused },
+            requestRestart = { restartCurrentProfile(generation) },
         )
         statusClient = status
         activeBox = box
@@ -828,6 +934,8 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
         dozePause.coreStarted(deviceIdle = deviceIsIdle())
         status.start(config.profileId)
         connectedAtMillis = System.currentTimeMillis()
+        tunnelWakeLock.sessionStarted()
+        outageLog.sessionStarted(connectedName)
         CoreManager.setProtectHook(::protectRawFd)
         scope.launch { LeanApp.instance.settings.setSelectedProfile(config.profileId) }
         val description = if (config.profileId == CoreManager.AUTO_PROFILE_ID) {
@@ -842,6 +950,7 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
             if (activeBox === box) {
                 activeBox = null
                 dozePause.coreStopped()
+                tunnelWakeLock.sessionStopped()
             }
             status.close()
         }
@@ -864,8 +973,13 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
             // server", poisoning the sort order and the «Авто» prediction with it.
             CoreManager.setProtectHook(::protectRawFd)
             CoreManager.appendLog("▶ ${profile.name} (AmneziaWG)")
+            tunnelWakeLock.sessionStarted()
+            outageLog.sessionStarted(profile.name)
             val traffic = scope.launch { pollAwgTraffic(generation, handle) }
-            AwgSessionObserver { traffic.cancel() }
+            AwgSessionObserver {
+                traffic.cancel()
+                tunnelWakeLock.sessionStopped()
+            }
         }
 
     /**
@@ -1201,6 +1315,21 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
          * short enough that a genuine reboot or a much later always-on start counts fresh.
          */
         private const val SYSTEM_START_WINDOW_MS = 90_000L
+
+        /** Failures before the system-driven restarts start waiting between attempts. */
         private const val MAX_SYSTEM_START_STREAK = 3
+
+        /**
+         * Failures before they stop altogether.
+         *
+         * Eight, with the backoff below, spans roughly ten minutes of trying, which
+         * covers the conditions that pass on their own (a memory squeeze, a vendor
+         * battery sweep, a network that is not up yet at boot) and stops well short of
+         * retrying a genuinely broken configuration all day.
+         */
+        private const val MAX_SYSTEM_START_STREAK_HARD = 8
+
+        /** First backoff step; doubles per failure, capped at 8× (4 minutes). */
+        private const val SYSTEM_START_BACKOFF_BASE_MS = 30_000L
     }
 }

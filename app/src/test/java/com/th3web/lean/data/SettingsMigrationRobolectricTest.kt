@@ -59,6 +59,30 @@ class SettingsMigrationRobolectricTest {
     }
 
     @Test
+    fun `a fresh install does not opt itself into HWID or the update check`() = runBlocking {
+        // Both keys used to be seeded with `true` by migrateToVersion1, which every fresh
+        // install runs (it starts at schema 0). A stored value beats the repository's
+        // default, so the opt-in HWID header quartet was ON before the user saw a screen,
+        // and the F-Droid build still called api.github.com on first launch. Absence is
+        // the only state that means "not answered yet".
+        val preferences = SettingsMigration.migrate(emptyPreferences())
+
+        assertEquals(null, preferences[SettingsKeys.SEND_HWID])
+        assertEquals(null, preferences[SettingsKeys.CHECK_APP_UPDATES])
+    }
+
+    @Test
+    fun `an explicit HWID choice survives the migration chain`() = runBlocking {
+        // The flip side: someone who turned HWID on (a panel that binds a subscription to
+        // a device needs it) must not have it quietly turned off by an upgrade.
+        val existing = mutablePreferencesOf(SettingsKeys.SEND_HWID to true)
+
+        val preferences = SettingsMigration.migrate(existing.toPreferences())
+
+        assertEquals(true, preferences[SettingsKeys.SEND_HWID])
+    }
+
+    @Test
     fun `migration preserves explicit existing values and adds only missing keys`() = runBlocking {
         val existing = mutablePreferencesOf(
             SettingsKeys.IPV6 to true,

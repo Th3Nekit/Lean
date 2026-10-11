@@ -39,6 +39,8 @@ internal object SettingsKeys {
     val LOG_LEVEL = stringPreferencesKey("log_level")
     val KILL_SWITCH = booleanPreferencesKey("kill_switch")
     val DOZE_PAUSE = booleanPreferencesKey("doze_pause")
+    val WAKE_LOCK = booleanPreferencesKey("wake_lock")
+    val AUTO_RECOVER = booleanPreferencesKey("auto_recover")
     val BATTERY_WARNING_HIDDEN = booleanPreferencesKey("battery_warning_hidden")
     val MUX = booleanPreferencesKey("mux")
     val FRAGMENT = booleanPreferencesKey("fragment")
@@ -369,8 +371,22 @@ object SettingsMigration : DataMigration<Preferences> {
         preferences.putIfMissing(SettingsKeys.MUX, false)
         preferences.putIfMissing(SettingsKeys.FRAGMENT, false)
         preferences.putIfMissing(SettingsKeys.AUTO_UPDATE, false)
-        preferences.putIfMissing(SettingsKeys.CHECK_APP_UPDATES, true)
-        preferences.putIfMissing(SettingsKeys.SEND_HWID, true)
+        // CHECK_APP_UPDATES is not seeded either, for the same reason as SEND_HWID below:
+        // a fresh install runs this step, and a materialised `true` overrode the
+        // per-flavour default (BuildConfig.UPDATE_CHECK_DEFAULT), so the F-Droid build
+        // would still have called GitHub on its first launch.
+        // SEND_HWID is deliberately NOT seeded here.
+        //
+        // A fresh install starts at schema 0, so it runs this step, and the `true` that
+        // used to be here materialised the key before the user had seen a single screen.
+        // The repository's own default is `?: false` (opt-in, see commit "Не отправлять
+        // HWID без согласия"), but a stored value wins over it, so the whole opt-in was
+        // undone by its own migration: a new install measured as send_hwid = true, the
+        // Settings switch read checked, and the notice offering to turn HWID on never
+        // appeared, because ServersScreen only renders it while the setting is off.
+        //
+        // Leaving the key absent is what makes "no answer yet" distinguishable from
+        // "the user said yes", which is the only state an opt-in can start in.
         preferences.putIfMissing(SettingsKeys.PING_PROTOCOL, SettingsDefaults.PING_PROTOCOL)
         preferences.putIfMissing(SettingsKeys.PING_URL, SettingsDefaults.TEST_URL)
         preferences.putIfMissing(SettingsKeys.PING_TIMEOUT, SettingsDefaults.PROFILE_TEST_TIMEOUT_MS)

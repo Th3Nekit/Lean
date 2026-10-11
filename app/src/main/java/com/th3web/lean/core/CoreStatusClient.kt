@@ -10,6 +10,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import com.th3web.lean.core.engine.NekoBox
 import com.th3web.lean.core.engine.TrafficAccumulator
@@ -23,6 +24,24 @@ class CoreStatusClient(
     private val box: NekoBox,
     profiles: List<Profile>,
     cacheDir: File,
+    /**
+     * «Восстанавливать соединение само» — whether the idle health probe runs at all.
+     * Defaults to off so a caller that does not own the recovery decision (tests, and
+     * anything constructing this for its status feed alone) never silently starts
+     * reconnecting a tunnel. [LeanVpnService] passes the live setting.
+     */
+    private val healthCheckEnabled: () -> Boolean = { false },
+    /**
+     * True while the core has been handed to sing-box's pause manager (see [DozePause]).
+     * A paused core carries nothing by design, so probing it would fail every time and
+     * the escalation would reconnect a tunnel that is working exactly as asked.
+     */
+    private val corePaused: () -> Boolean = { false },
+    /**
+     * Last rung of the ladder: rebuild the core for the same profile. Invoked at most
+     * once per escalation, and only after a reset has been tried and given time.
+     */
+    private val requestRestart: () -> Unit = {},
 ) {
     private val job = SupervisorJob(parentScope.coroutineContext[Job])
     private val scope = CoroutineScope(Dispatchers.IO + job)
@@ -35,6 +54,12 @@ class CoreStatusClient(
      * without it «зависает через какое-то время» has no answer but a manual reconnect.
      */
     private val stall = TunnelStallWatch()
+
+    /**
+     * Asks the tunnel whether it still carries, during the silence [stall] cannot read.
+     * See [TunnelHealthCheck] for why both exist.
+     */
+    private val health = TunnelHealthCheck()
     // delayMs starts unknown for every node: this field means "measured through the
     // tunnel", and nothing has been measured yet at connect time. Seeding it from the
     // profile's stored edge-ping made the rows show a connect-time snapshot that no
@@ -125,6 +150,14 @@ class CoreStatusClient(
                             )
                         }
                 }
+                // The same counters answer a second question: has anything arrived
+                // lately at all? Only silence is worth probing (see [TunnelHealthCheck]),
+                // so this is where the clock on it is kept.
+                if (sample.downlinkTotal > lastDownlinkTotal) {
+                    lastDownlinkTotal = sample.downlinkTotal
+                    lastDownlinkAtNanos = System.nanoTime()
+                }
+                maybeProbeHealth()
                 delay(if (LeanForeground.visible) STATUS_INTERVAL_MS else STATUS_IDLE_INTERVAL_MS)
             }
         }
@@ -132,6 +165,92 @@ class CoreStatusClient(
             while (isActive && isLive()) {
                 CoreManager.appendLogs(logTail.readNewLines())
                 delay(if (LeanForeground.visible) LOG_INTERVAL_MS else LOG_IDLE_INTERVAL_MS)
+            }
+        }
+    }
+
+    /** Running totals, to tell "received nothing lately" from "idle for a second". */
+    private var lastDownlinkTotal = 0L
+    private var lastDownlinkAtNanos = System.nanoTime()
+    private var lastProbeAtNanos = System.nanoTime()
+
+    /** One probe at a time, and never on the status loop. See [maybeProbeHealth]. */
+    private val probing = AtomicBoolean(false)
+
+    /**
+     * Sends the idle health probe when it is due, and acts on the verdict.
+     *
+     * Three gates before anything leaves the device, each one a case where probing would
+     * be wrong rather than merely wasteful:
+     *
+     *  * the setting is off — the user declined automatic recovery;
+     *  * the core is paused for Doze — it carries nothing on purpose;
+     *  * the tunnel received something recently — it has already answered.
+     *
+     * The probe itself is the live core's own `urlTest`, i.e. a real generate_204 through
+     * the selected outbound. It is the same call «Проверить текущий маршрут» makes, so it
+     * measures the tunnel rather than the phone's connectivity.
+     */
+    private fun maybeProbeHealth() {
+        if (!healthCheckEnabled() || corePaused()) return
+        // Never on the status loop's own coroutine. box.urlTest is a blocking JNI call
+        // with an eight-second budget, and this loop is what feeds the speed line and the
+        // stall watch: running the probe inline froze both for the duration, so the UI
+        // showed a tunnel that had stopped moving — while measuring one that had not.
+        if (!probing.compareAndSet(false, true)) return
+        val now = System.nanoTime()
+        val idleThreshold = if (LeanForeground.visible) {
+            TunnelHealthCheck.IDLE_BEFORE_PROBE_MS
+        } else {
+            TunnelHealthCheck.IDLE_BEFORE_PROBE_IDLE_MS
+        } * 1_000_000L
+        if (now - lastDownlinkAtNanos < idleThreshold || now - lastProbeAtNanos < idleThreshold) {
+            // Nothing to do yet. The flag has to be released here too, or the first
+            // early return would stop every later probe from ever running.
+            probing.set(false)
+            return
+        }
+        lastProbeAtNanos = now
+        scope.launch {
+            try {
+                runProbe()
+            } finally {
+                probing.set(false)
+            }
+        }
+    }
+
+    /** The probe itself, on its own coroutine. See [maybeProbeHealth]. */
+    private suspend fun runProbe() {
+        val measured = withContext(Dispatchers.IO) {
+            runCatching { box.urlTest(TEST_URL, TunnelHealthCheck.PROBE_TIMEOUT_MS) }
+                .getOrDefault(-1)
+        }
+        if (!isLive()) return
+        when (health.onProbe(ok = measured >= 0)) {
+            TunnelHealthCheck.Action.None ->
+                if (measured < 0) {
+                    CoreManager.appendLog(
+                        tr("⚠ проверка туннеля не прошла (%d подряд)").format(health.failures),
+                    )
+                }
+
+            TunnelHealthCheck.Action.Reset -> {
+                CoreManager.appendLog(
+                    tr("⚠ туннель молчит на проверках — сбрасываю соединения и DNS"),
+                )
+                runCatching { box.resetNetwork() }
+                    .onFailure { error ->
+                        CoreManager.appendLog(
+                            tr("⚠ сброс не удался: %s")
+                                .format(error.message ?: error.javaClass.simpleName),
+                        )
+                    }
+            }
+
+            TunnelHealthCheck.Action.Restart -> {
+                CoreManager.appendLog(tr("↻ сброс не помог — перезапускаю подключение"))
+                runCatching { requestRestart() }
             }
         }
     }

@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
+import libcore.Libcore
 import com.th3web.lean.LeanApp
 import com.th3web.lean.core.engine.LibcoreNekoCore
 import com.th3web.lean.core.engine.NekoBox
@@ -62,10 +63,56 @@ object UrlTestPinger {
             return XrayUrlTest.measure(LeanApp.instance, outbound, pingUrl, timeoutMs)
         }
         if (!supports(outbound)) return null
-        return concurrencyGate.withPermit { measureUnbounded(outbound, pingUrl, timeoutMs) }
+        // Two gates, and the outer one only matters while a tunnel is up.
+        //
+        // Five throwaway cores at once is fine on an idle app. It is not fine beside a
+        // running tunnel: the probe instances and the live core share this process and the
+        // one Go heap, a sixty-server sweep boots sixty of them, and the peak is what the
+        // system's low-memory killer reads. A kill there does not look like a failed ping,
+        // it looks like the VPN switching itself off — which is exactly how it was
+        // reported. Halving the peak costs a slower sweep in the one case where the sweep
+        // is not what the user is waiting for.
+        return if (CoreManager.isActive) {
+            tunnelGate.withPermit {
+                concurrencyGate.withPermit { measureUnbounded(outbound, pingUrl, timeoutMs) }
+            }
+        } else {
+            concurrencyGate.withPermit { measureUnbounded(outbound, pingUrl, timeoutMs) }
+        }
     }
 
     private suspend fun measureUnbounded(outbound: Outbound, pingUrl: String, timeoutMs: Int): Int? {
+        inFlight.incrementAndGet()
+        try {
+            return measureInstance(outbound, pingUrl, timeoutMs)
+        } finally {
+            // The last probe of a sweep hands the Go heap back to the OS. Go keeps freed
+            // pages for itself, so sixty probe instances leave the process holding their
+            // peak footprint for the rest of its life — next to a live tunnel that is a
+            // process the system kills, and a tunnel the user sees drop for no reason.
+            // Once per sweep, not once per probe: FreeOSMemory stops the world.
+            if (inFlight.decrementAndGet() == 0) releaseProbeMemory()
+        }
+    }
+
+    /**
+     * Returns the Go runtime's unused pages to the OS. Safe to call with a tunnel
+     * running: it frees what nothing references and does not touch the live instance.
+     *
+     * Not a suspend function, deliberately. It is called from a `finally` that also runs
+     * when the sweep is cancelled (the user left the screen), and a suspending call in a
+     * cancelled coroutine would simply not happen — which is the one case where the
+     * memory most needs handing back. A fire-and-forget daemon thread runs regardless,
+     * and nothing waits on the result.
+     */
+    private fun releaseProbeMemory() {
+        Thread({ runCatching { Libcore.forceGc() } }, "lean-probe-gc").apply {
+            isDaemon = true
+            start()
+        }
+    }
+
+    private suspend fun measureInstance(outbound: Outbound, pingUrl: String, timeoutMs: Int): Int? {
         val app = LeanApp.instance
         val settings = app.settings.state.value
         // null, not -1: a config we could not build or a core that would not instantiate
@@ -83,10 +130,29 @@ object UrlTestPinger {
             // A core that will not start is our failure, not the server's.
             val started = awaitNative(START_TIMEOUT_MS) { box.start() }
             if (started == null || started.isFailure) return null
-            val tested = awaitNative(timeoutMs + URL_TEST_SLACK_MS) { box.urlTest(pingUrl, timeoutMs) }
+            // Two round trips, the first one only to pay for the session.
+            //
+            // A fresh instance's first urlTest carries the whole bring-up: the server's
+            // hostname resolved for the first time, the TCP connect, the protocol's own
+            // handshake (TLS/Reality/…), and only then the HTTP request. None of that is
+            // latency, and all of it lands on the one number the row shows, which is why
+            // a 100 ms server could read as 400. The second test runs over a warm DNS
+            // cache and a warm session, which is what the number is supposed to mean.
+            //
+            // Cheap here: the expensive part of this probe is booting the instance, and
+            // that is already paid. Same discipline as
+            // [com.th3web.lean.data.net.Pinger.tcpLatency]'s warm double connect and
+            // [com.th3web.lean.core.plugin.XrayUrlTest]'s, including the rule that a warm
+            // miss never buries a server the cold pass proved alive.
+            val warm = awaitNative(timeoutMs + URL_TEST_SLACK_MS) { box.urlTest(pingUrl, timeoutMs) }
             // A throw from urlTest is the instance failing; a negative return is the
             // server failing the test, and only that is a real miss.
-            tested?.getOrNull()
+            val warmMs = warm?.getOrNull() ?: return null
+            if (warmMs < 0) return warmMs
+            val measured = awaitNative(timeoutMs + URL_TEST_SLACK_MS) {
+                box.urlTest(pingUrl, timeoutMs)
+            }?.getOrNull()
+            if (measured != null && measured in 1 until warmMs) measured else warmMs
         } catch (e: Exception) {
             null
         } finally {
@@ -96,6 +162,13 @@ object UrlTestPinger {
 
     private const val MAX_CONCURRENT = 5
     private val concurrencyGate = Semaphore(MAX_CONCURRENT)
+
+    /** How many probe instances may exist while a tunnel is running. See [measure]. */
+    private const val MAX_CONCURRENT_WITH_TUNNEL = 2
+    private val tunnelGate = Semaphore(MAX_CONCURRENT_WITH_TUNNEL)
+
+    /** Probes that have not finished, so the last one out can free the Go heap. */
+    private val inFlight = java.util.concurrent.atomic.AtomicInteger(0)
 
     private const val START_TIMEOUT_MS = 10_000L
     private const val CLOSE_TIMEOUT_MS = 5_000L

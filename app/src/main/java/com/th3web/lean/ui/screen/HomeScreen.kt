@@ -131,6 +131,8 @@ fun HomeScreen(
     onDisconnect: () -> Unit,
     onOpenServers: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSpeedTest: () -> Unit = {},
+    onOpenServices: () -> Unit = {},
     vm: HomeViewModel = viewModel(),
 ) {
     val app = LeanApp.instance
@@ -237,6 +239,11 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    // «Скорость» sits first because it is the one action that answers a
+                    // question about the tunnel that is already up, rather than changing it.
+                    IconButton(onClick = onOpenSpeedTest) {
+                        LeanIconImage(LeanIcon.Speed, tint = LeanColors.TextSecondary, modifier = Modifier.size(22.dp))
+                    }
                     IconButton(onClick = onOpenServers) {
                         LeanIconImage(LeanIcon.Servers, tint = LeanColors.TextSecondary, modifier = Modifier.size(22.dp))
                     }
@@ -340,6 +347,11 @@ fun HomeScreen(
                     if (LeanOptions.showConnectionTestBlock) {
                         Spacer(Modifier.height(14.dp))
                         ConnectionCheckButton(connCheck) { vm.checkConnection() }
+                        Spacer(Modifier.height(8.dp))
+                        // Next to the connectivity check, because it answers the question
+                        // people ask straight after it: the check says the tunnel carries
+                        // traffic, this says whether the sites they came for open.
+                        ServiceCheckRow(onClick = onOpenServices)
                     }
                 }
                 Spacer(Modifier.height(22.dp))
@@ -581,6 +593,46 @@ fun HomeScreen(
             )
         }
       }
+    }
+}
+
+/**
+ * «Что работает сейчас» as one row under the connectivity check.
+ *
+ * A row rather than a second button: the check above is the action on this card, and two
+ * equal-weight buttons side by side would make the user choose between them without
+ * knowing the difference. This one reads as a place to go, which is what it is.
+ */
+@Composable
+private fun ServiceCheckRow(onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val press by animateFloatAsState(
+        targetValue = if (pressed) 0.98f else 1f,
+        animationSpec = LeanMotion.tween(140),
+        label = "services-press",
+    )
+    Surface(
+        color = Color.Transparent,
+        shape = LeanCorner.Row,
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer { scaleX = press; scaleY = press }
+            .clip(LeanCorner.Row)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                tr("Что работает сейчас"),
+                style = LeanType.meta,
+                color = LeanColors.TextSecondary,
+                modifier = Modifier.weight(1f),
+            )
+            Text("›", style = LeanType.rowTitle, color = LeanColors.TextTertiary)
+        }
     }
 }
 

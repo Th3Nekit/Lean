@@ -66,11 +66,17 @@ class SetAllCoversEveryFieldTest {
         logLevel = "debug",
         killSwitch = true,
         dozePause = true,
+        wakeLock = false,
+        autoRecover = false,
         batteryWarningHidden = true,
         mux = true,
         fragment = true,
         autoUpdate = true,
-        checkAppUpdates = false,
+        // Not a literal: this field's default is per flavour (BuildConfig.UPDATE_CHECK_DEFAULT
+        // is true in `full` and false in `foss`), so `false` was off the default in one
+        // build and exactly the default in the other — and this test, whose whole job is
+        // to catch a field that was never moved, failed in `foss` only.
+        checkAppUpdates = !com.th3web.lean.BuildConfig.UPDATE_CHECK_DEFAULT,
         sendHwid = true,
         hwidHintHidden = true,
         pingProtocol = "ICMP",

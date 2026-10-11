@@ -33,6 +33,7 @@ app/libs/*.aar
 # Pinned by sha256 in native/versions.lock and re-fetched per build — the lock is the
 # source of truth, the binaries are just its output.
 app/src/main/jniLibs/
+app/src/full/jniLibs/
 
 # Kotlin
 .kotlin/

@@ -113,11 +113,40 @@ internal object XrayUrlTest {
                 }
             } ?: return@withContext null
 
-            request(pingUrl, port, timeoutMs)
+            warmedRequest(pingUrl, port, timeoutMs)
         } finally {
             runCatching { process?.destroy() }
             runCatching { configFile.delete() }
         }
+    }
+
+    /**
+     * The reported RTT: a first round trip to pay for the session, a second one to time.
+     *
+     * This is the whole XHTTP ping fix. A cold request through a freshly spawned Xray is
+     * not a latency, it is a bring-up: the SOCKS hop, Xray's own DNS lookup of the test
+     * host, TCP and TLS to the CDN edge, then the edge's own connection to the origin,
+     * and only after all that the GET. Field reports put that at 700–1200 ms for nodes
+     * whose actual round trip is 100–200, so every XHTTP row read as the slowest server
+     * in the list while being one of the faster ones.
+     *
+     * The second request runs over what the first one built, which is what a user means
+     * by "ping", and it is the same trick [com.th3web.lean.data.net.Pinger.tcpLatency]
+     * already uses for its double TCP connect, for the same reason and with the same
+     * shape (report the warm number, never let a warm miss bury a server that answered).
+     *
+     * Cost is one extra round trip per node, which is nothing next to the process spawn
+     * this probe already pays for.
+     */
+    private fun warmedRequest(pingUrl: String, port: Int, timeoutMs: Int): Int {
+        val warm = request(pingUrl, port, timeoutMs)
+        // A node that fails the very first request failed the test; measuring again
+        // would only spend another timeout on a server that just said no.
+        if (warm < 0) return warm
+        val measured = request(pingUrl, port, timeoutMs)
+        // A second attempt that missed is momentary loss on a path that provably works,
+        // never a dead node: keep the number the node did produce.
+        return if (measured in 1 until warm) measured else warm
     }
 
     /**
@@ -126,6 +155,12 @@ internal object XrayUrlTest {
      * The same shape as the raw-socket HTTP probe: only a clean 204/200
      * counts, because a redirect or any other status is a captive portal or a DPI stub
      * answering on the server's behalf, not the server.
+     *
+     * The body is drained and the connection is NOT disconnected, which is what lets
+     * [warmedRequest]'s second call reuse it: `disconnect()` evicts the socket from the
+     * JVM's keep-alive cache, so the measured request would pay for the whole XHTTP
+     * bring-up again and measure exactly what the warm-up exists to exclude. The probe
+     * process is destroyed by the caller a moment later, so nothing is left open.
      */
     private fun request(pingUrl: String, port: Int, timeoutMs: Int): Int {
         val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress(PluginConfig.LOCALHOST, port))
@@ -141,11 +176,17 @@ internal object XrayUrlTest {
         return try {
             val code = connection.responseCode
             val elapsed = ((System.nanoTime() - started) / 1_000_000).toInt()
-            if (code == 204 || code == 200) elapsed.coerceAtLeast(1) else -1
+            if (code == 204 || code == 200) {
+                // A generate_204 carries no body, but an empty stream still has to be
+                // read to its end for the connection to go back into the pool.
+                runCatching { connection.inputStream.use { it.readBytes() } }
+                elapsed.coerceAtLeast(1)
+            } else {
+                runCatching { connection.errorStream?.use { it.readBytes() } }
+                -1
+            }
         } catch (_: Throwable) {
             -1
-        } finally {
-            runCatching { connection.disconnect() }
         }
     }
 

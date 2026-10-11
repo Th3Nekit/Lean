@@ -9,6 +9,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Partial wake lock held while a tunnel is up («Не давать системе усыплять
+         туннель», on by default, see core/TunnelWakeLock.kt). A foreground service
+         survives being backgrounded but not the CPU sleeping: in Doze the core's
+         keepalives, rekeys and heartbeats are coalesced into maintenance windows minutes
+         apart, the far end drops the session, and the user finds the VPN off with nothing
+         in between. This is the sanctioned way to say that work must keep ticking. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Auto-connect after a device reboot (gated by the autoConnect setting). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 

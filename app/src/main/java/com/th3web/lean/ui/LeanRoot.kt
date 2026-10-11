@@ -13,6 +13,7 @@ import com.th3web.lean.ui.screen.AboutScreen
 import com.th3web.lean.ui.screen.AppearanceHub
 import com.th3web.lean.ui.screen.BackupScreen
 import com.th3web.lean.ui.screen.ConnectionHub
+import com.th3web.lean.ui.screen.DiagnosticsScreen
 import com.th3web.lean.ui.screen.DnsScreen
 import com.th3web.lean.ui.screen.HomeScreen
 import com.th3web.lean.ui.screen.IpTypeScreen
@@ -26,7 +27,9 @@ import com.th3web.lean.ui.screen.PingScreen
 import com.th3web.lean.ui.screen.ProviderHub
 import com.th3web.lean.ui.screen.RuleSetsScreen
 import com.th3web.lean.ui.screen.ServersScreen
+import com.th3web.lean.ui.screen.ServiceCheckScreen
 import com.th3web.lean.ui.screen.SettingsScreen
+import com.th3web.lean.ui.screen.SpeedTestScreen
 import com.th3web.lean.ui.screen.appearance.AppearanceColorScreen
 import com.th3web.lean.ui.screen.appearance.AppearanceFontsScreen
 import com.th3web.lean.ui.screen.appearance.AppearanceHomeStyleScreen
@@ -87,6 +90,8 @@ fun LeanRoot(
                     onDisconnect = onDisconnect,
                     onOpenServers = { navController.navigate(Routes.SERVERS) },
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    onOpenSpeedTest = { navController.navigate(Routes.SPEEDTEST) },
+                    onOpenServices = { navController.navigate(Routes.SERVICES) },
                 )
             }
         }
@@ -142,6 +147,14 @@ fun LeanRoot(
         composable(Routes.PER_APP) { PerAppScreen(onBack = { navController.popBackStack() }) }
 
         composable(Routes.LOGS) { LogsScreen(onBack = { navController.popBackStack() }) }
+        composable(Routes.SPEEDTEST) { SpeedTestScreen(onBack = { navController.popBackStack() }) }
+        composable(Routes.SERVICES) {
+            ServiceCheckScreen(
+                onBack = { navController.popBackStack() },
+                onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
+            )
+        }
+        composable(Routes.DIAGNOSTICS) { DiagnosticsScreen(onBack = { navController.popBackStack() }) }
         composable(Routes.OLCRTC_NEW) {
             OlcrtcBuilderScreen(onBack = { navController.popBackStack() })
         }

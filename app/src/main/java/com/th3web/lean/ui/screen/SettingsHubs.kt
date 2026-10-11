@@ -1028,6 +1028,30 @@ fun ConnectionHub(onBack: () -> Unit, onNavigate: (String) -> Unit) {
             LeanDivider()
             BatteryOptimisationItem()
             LeanDivider()
+            // The two switches that keep a tunnel alive through a sleeping phone. Worded
+            // as the trade each one is: the first costs battery and buys a tunnel that is
+            // still there in the morning, the second acts only on a tunnel that has
+            // already stopped answering.
+            LeanToggleItem(
+                LeanIcon.Power,
+                if (settings.wakeLock) LeanColors.Connected else LeanColors.TextSecondary,
+                tr("Не давать системе усыплять туннель"),
+                tr("Надёжнее в фоне, но расход батареи выше"),
+                settings.wakeLock,
+            ) { on ->
+                scope.launch { repo.setWakeLock(on) }
+            }
+            LeanDivider()
+            LeanToggleItem(
+                LeanIcon.Refresh,
+                if (settings.autoRecover) LeanColors.Connected else LeanColors.TextSecondary,
+                tr("Восстанавливать соединение само"),
+                tr("Проверяет туннель в простое и переподключает, если он замолчал"),
+                settings.autoRecover,
+            ) { on ->
+                scope.launch { repo.setAutoRecover(on) }
+            }
+            LeanDivider()
             // Worded as what it does to the tunnel, not as a battery promise.
             // Pausing the core holds new connections until the device wakes, so while the
             // system is dozing nothing connects and nothing arrives. Off by default.

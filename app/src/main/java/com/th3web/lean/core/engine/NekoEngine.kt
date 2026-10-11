@@ -226,6 +226,13 @@ class NekoEngine(
                 // not be able to wedge the coordinator's actor (that is what made "Stop"
                 // hang forever in "Отключение").
                 closeBounded(box)
+                // And hand the closed instance's pages back to the OS. Go does not
+                // return freed memory on its own, so without this a reconnect builds the
+                // new core on top of the old one's footprint and the process grows with
+                // every switch — the shape of a tunnel that dies after a long session of
+                // changing servers. Fire-and-forget: nothing here waits on a
+                // stop-the-world pause during a disconnect.
+                releaseNativeMemory()
             } finally {
                 tunnel.close(generation)
             }
@@ -257,6 +264,20 @@ private const val OBSERVER_CLOSE_TIMEOUT_MS = 1_000L
 
 private suspend fun closeBounded(box: NekoBox) {
     runCatching { awaitNative(CLOSE_TIMEOUT_MS, "close") { box.close() } }
+}
+
+/**
+ * Asks the Go runtime to return unused pages to the OS, on a thread of its own.
+ *
+ * Called after a core instance is closed. `debug.FreeOSMemory` behind this is a
+ * stop-the-world pause, so it is never waited on: a disconnect must not get slower
+ * because the heap is being tidied, and a failure is of no consequence.
+ */
+private fun releaseNativeMemory() {
+    Thread({ runCatching { libcore.Libcore.forceGc() } }, "lean-core-gc").apply {
+        isDaemon = true
+        start()
+    }
 }
 
 /**
