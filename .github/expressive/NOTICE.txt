@@ -1,0 +1,5 @@
+Visuals use Expressive Profile by metawka (MIT).
+Upstream: https://github.com/metawka/expressive-profile/tree/72384999ce9e902c0ab3222a481f7fd0931497e6
+Google Sans Flex and Roboto Flex: SIL Open Font License.
+Material Symbols: Apache-2.0. Simple Icons: CC0-1.0; brand marks belong to their owners.
+These notices apply to the visual assets and renderer, not to the project code.

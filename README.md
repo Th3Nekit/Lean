@@ -1,3 +1,10 @@
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/expressive/header-dark.svg">
+  <img src=".github/expressive/header-light.svg" width="100%" alt="Lean — проект Th3Nekit">
+</picture>
+</p>
+
 <div align="center">
 
 # Lean
