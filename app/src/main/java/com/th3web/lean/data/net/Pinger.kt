@@ -34,15 +34,15 @@ private const val LINUX_SOCK_NONBLOCK = 0x800
  *    answered, and fall back to [icmpLatency].
  *  - ICMP: a rootless echo over an unprivileged datagram socket, falling back to TCP
  *    where the OEM restricts net.ipv4.ping_group_range.
- *  - GET/HEAD: a real HTTP round trip to the configured pingUrl, timed to the response
- *    status line. The overload without a URL falls back to TCP.
+ *  - GET/HEAD: a round trip through this row's outbound, or an explicit HTTP
+ *    request when no outbound is supplied. No TCP substitution on failure.
  *  - URL Test: the real thing GET/HEAD approximates, a round trip through the
  *    outbound's own protocol handshake, see [com.th3web.lean.core.UrlTestPinger].
- *    Needs [outbound] and [urlTestProbe]; without them it falls back to TCP/UDP.
+ *    Needs [outbound] and [urlTestProbe]; an unavailable test returns -1.
  *
  * Every raw-socket probe accepts an optional [protect] hook, VpnService.protect(rawFd),
  * that keeps the probe off the tunnel, so the number is the RTT to the real server rather
- * than to the proxy egress. HTTP GET/HEAD stays on the tunnel.
+ * than to the proxy egress. The resolver hook uses DNS on the physical network too.
  */
 object Pinger {
 
@@ -63,10 +63,8 @@ object Pinger {
     private const val ICMPV6_ECHO_REPLY = 129
 
     /**
-     * URL-less entry point (per-server probe with no HTTP target). ICMP and TCP
-     * behave as documented; GET/HEAD have no URL to hit here, so they fall back to
-     * a TCP connect, the honest offline measurement. Use the [pingUrl] overload
-     * to get a real HTTP GET/HEAD round-trip.
+     * URL-less entry point for ICMP and TCP. HTTP tests require the [pingUrl]
+     * overload and cannot succeed without a target.
      */
     suspend fun measure(
         host: String,
@@ -74,13 +72,14 @@ object Pinger {
         protocol: String,
         timeoutMs: Int = 3000,
         protect: ((FileDescriptor) -> Unit)? = null,
-    ): Int = measure(host, port, protocol, timeoutMs, pingUrl = null, protect = protect)
+        resolve: ((String) -> InetAddress)? = null,
+    ): Int = measure(host, port, protocol, timeoutMs, pingUrl = null, protect = protect, resolve = resolve)
 
     /**
      * Full entry point.
      *
-     * @param pingUrl target for GET/HEAD, timed to the response status line and falling
-     *   back to a TCP connect when the request cannot complete. Ignored by ICMP and TCP.
+     * @param pingUrl target for GET/HEAD and URL Test through the row's outbound.
+     *   Ignored by ICMP and TCP.
      * @param udpService set by the caller (see [isUdpService]) for QUIC/UDP protocols. It
      *   redirects the TCP branch only, since a TCP connect to a UDP-only port is dead by
      *   construction.
@@ -88,8 +87,7 @@ object Pinger {
      *   while it is up. Null off-VPN, where it would be a no-op.
      * @param outbound the profile being probed, for "URL Test".
      * @param urlTestProbe the "URL Test" runner, injected as a lambda so this object stays
-     *   testable on the JVM without the native core. Without it, "URL Test" falls back to
-     *   the same TCP/UDP probe TCP uses.
+     *   testable on the JVM without the native core. An unavailable test returns -1.
      */
     suspend fun measure(
         host: String,
@@ -101,9 +99,10 @@ object Pinger {
         protect: ((FileDescriptor) -> Unit)? = null,
         outbound: Outbound? = null,
         urlTestProbe: (suspend (Outbound, String, Int) -> Int?)? = null,
+        resolve: ((String) -> InetAddress)? = null,
     ): Int = when (protocol.uppercase()) {
-        "ICMP" -> icmpLatency(host, port, timeoutMs, protect)
-        "GET", "HEAD" -> {
+        "ICMP" -> icmpLatency(host, port, timeoutMs, protect, resolve)
+        "GET", "HEAD", "URLTEST" -> {
             // through the server on the row, first and by preference.
             //
             // A plain HTTP round trip to pingUrl over the app's own network measures the
@@ -111,9 +110,7 @@ object Pinger {
             // same number to all sixty rows of a sweep. An option offered, rendered and
             // sorted on per row has to be about that row's server.
             //
-            // So it goes through a probe instance for this outbound, the same way URL Test
-            // does. The direct request stays as the fallback, and is the right answer
-            // while connected, where the app's own traffic already rides the tunnel.
+            // A raw endpoint handshake cannot stand in for an unavailable HTTP test.
             val viaCore = if (
                 outbound != null && supportsUrlTest(outbound) &&
                 urlTestProbe != null && !pingUrl.isNullOrBlank()
@@ -122,46 +119,13 @@ object Pinger {
             } else {
                 null
             }
-            if (viaCore == null && outbound != null && supportsUrlTest(outbound)) {
+            if (viaCore == null && outbound != null) {
                 PingState.countSubstitution()
             }
-            viaCore ?: if (!pingUrl.isNullOrBlank()) {
+            viaCore ?: if (outbound == null && protocol.uppercase() != URL_TEST_PROTOCOL && !pingUrl.isNullOrBlank()) {
                 httpLatency(pingUrl, protocol.uppercase(), timeoutMs)
-                    .takeIf { it >= 0 } ?: tcpLatency(host, port, timeoutMs, protect)
             } else {
-                tcpLatency(host, port, timeoutMs, protect)
-            }
-        }
-        "URLTEST" -> {
-            // supportsUrlTest keeps WireGuard OUT of the probe: it has no "outbound" form
-            // to build a test instance from, so the probe could never measure it.
-            //
-            // The probe answers null when it could not run at all, no core instance, a
-            // config it refused. That says nothing about the server, so it falls through
-            // to the raw probe below and the row shows a real number. Only a negative
-            // number means the test ran and the server failed it. Conflating those two is
-            // what made a probe that worked nowhere look like a list of dead servers.
-            val viaCore = if (
-                outbound != null && supportsUrlTest(outbound) &&
-                urlTestProbe != null && !pingUrl.isNullOrBlank()
-            ) {
-                urlTestProbe(outbound, pingUrl, timeoutMs)
-            } else {
-                null
-            }
-            // Nothing ran, so whatever comes back next answers a different question than
-            // the one the user asked. Counted, so the sweep can say so afterwards, the
-            // alternative is a list that looks measured and is not. Only for nodes that
-            // could have been tested: a protocol with no outbound form to build a probe
-            // from was never going to be, and saying so every time would be noise.
-            if (viaCore == null && outbound != null && supportsUrlTest(outbound)) {
-                PingState.countSubstitution()
-            }
-            viaCore ?: if (udpService) {
-                udpLatency(host, port, timeoutMs, protect).takeIf { it >= 0 }
-                    ?: icmpLatency(host, port, timeoutMs, protect)
-            } else {
-                tcpLatency(host, port, timeoutMs, protect)
+                -1
             }
         }
         else ->
@@ -169,10 +133,10 @@ object Pinger {
                 // QUIC stacks silently drop garbage datagrams, so silence from
                 // the UDP probe is common even when the service is healthy,
                 // fall back to an ICMP echo for the path RTT to the host.
-                udpLatency(host, port, timeoutMs, protect)
-                    .takeIf { it >= 0 } ?: icmpLatency(host, port, timeoutMs, protect)
+                udpLatency(host, port, timeoutMs, protect, resolve)
+                    .takeIf { it >= 0 } ?: icmpLatency(host, port, timeoutMs, protect, resolve)
             } else {
-                tcpLatency(host, port, timeoutMs, protect)
+                tcpLatency(host, port, timeoutMs, protect, resolve)
             }
     }
 
@@ -211,8 +175,7 @@ object Pinger {
      *    from [com.th3web.lean.core.plugin.XrayUrlTest], which spawns the helper the core
      *    cannot be, see [com.th3web.lean.core.UrlTestPinger.measure]'s dispatch.
      *
-     * Both fall back to the raw UDP/TCP probe, which measures the real server address and
-     * is honest about what it is.
+     * Unsupported HTTP tests return -1. Raw endpoint latency remains available in TCP mode.
      *
      * Single source of truth: [com.th3web.lean.core.UrlTestPinger.supports] delegates here,
      * so the dispatch in [measure] and the probe itself can never disagree about which
@@ -235,8 +198,8 @@ object Pinger {
      * counts as success: a generate_204-style probe must answer exactly 204 (or
      * 200); any 3xx redirect or other status is a captive-portal / DPI stub, not a
      * working path, and must read as a miss (mirrors [ConnectionChecker]). Any
-     * non-204/200 status, or any I/O failure, returns -1 so the caller can fall
-     * back to TCP. Never throws.
+     * non-204/200 status, or any I/O failure, returns -1 to display a failed
+     * HTTP test. Never throws.
      */
     suspend fun httpLatency(url: String, method: String, timeoutMs: Int = 3000): Int =
         withContext(Dispatchers.IO) {
@@ -283,11 +246,12 @@ object Pinger {
         port: Int,
         timeoutMs: Int,
         protect: ((FileDescriptor) -> Unit)? = null,
+        resolve: ((String) -> InetAddress)? = null,
     ): Int = withContext(Dispatchers.IO) {
         var fd: FileDescriptor? = null
         try {
             val addr = withTimeoutOrNull(timeoutMs.toLong()) {
-                runInterruptible { InetAddress.getByName(host) }
+                runInterruptible { resolve?.invoke(host) ?: InetAddress.getByName(host) }
             } ?: return@withContext -1
             val isV6 = addr is Inet6Address
             val proto = if (isV6) IPPROTO_ICMPV6 else IPPROTO_ICMP
@@ -332,7 +296,7 @@ object Pinger {
             if (e.errno == OsConstants.EAGAIN) {
                 -1
             } else {
-                tcpLatency(host, port, timeoutMs, protect)
+                tcpLatency(host, port, timeoutMs, protect, resolve)
             }
         } catch (e: Exception) {
             -1
@@ -416,11 +380,12 @@ object Pinger {
         port: Int,
         timeoutMs: Int = 3000,
         protect: ((FileDescriptor) -> Unit)? = null,
+        resolve: ((String) -> InetAddress)? = null,
     ): Int = withContext(Dispatchers.IO) {
         var fd: FileDescriptor? = null
         try {
             val addr = withTimeoutOrNull(timeoutMs.toLong()) {
-                runInterruptible { InetAddress.getByName(host) }
+                runInterruptible { resolve?.invoke(host) ?: InetAddress.getByName(host) }
             } ?: return@withContext -1
             val isV6 = addr is Inet6Address
             val domain = if (isV6) OsConstants.AF_INET6 else OsConstants.AF_INET
@@ -497,10 +462,11 @@ object Pinger {
         port: Int,
         timeoutMs: Int = 3000,
         protect: ((FileDescriptor) -> Unit)? = null,
+        resolve: ((String) -> InetAddress)? = null,
     ): Int {
-        val first = tcpConnectOnce(host, port, timeoutMs, protect)
+        val first = tcpConnectOnce(host, port, timeoutMs, protect, resolve)
         if (first < 0) return first
-        val second = tcpConnectOnce(host, port, timeoutMs, protect)
+        val second = tcpConnectOnce(host, port, timeoutMs, protect, resolve)
         return warmResult(first, second)
     }
 
@@ -523,11 +489,12 @@ object Pinger {
         port: Int,
         timeoutMs: Int,
         protect: ((FileDescriptor) -> Unit)?,
+        resolve: ((String) -> InetAddress)?,
     ): Int = withContext(Dispatchers.IO) {
         var fd: FileDescriptor? = null
         try {
             val addr = withTimeoutOrNull(timeoutMs.toLong()) {
-                runInterruptible { InetAddress.getByName(host) }
+                runInterruptible { resolve?.invoke(host) ?: InetAddress.getByName(host) }
             } ?: return@withContext -1
             val isV6 = addr is Inet6Address
             val domain = if (isV6) OsConstants.AF_INET6 else OsConstants.AF_INET

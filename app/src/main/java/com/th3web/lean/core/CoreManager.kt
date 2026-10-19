@@ -153,8 +153,32 @@ object CoreManager {
     // read it without holding a Service reference. [retestAuto] asks the live core to
     // re-run its urltest (the real proxied generate_204 per node).
     @Volatile private var protectHook: ((java.io.FileDescriptor) -> Unit)? = null
+    @Volatile private var resolveHook: ((String) -> java.net.InetAddress)? = null
     val probeProtect: ((java.io.FileDescriptor) -> Unit)? get() = protectHook
-    internal fun setProtectHook(hook: ((java.io.FileDescriptor) -> Unit)?) { protectHook = hook }
+    val probeResolve: ((String) -> java.net.InetAddress)? get() = resolveHook
+    internal fun setProtectHook(
+        hook: ((java.io.FileDescriptor) -> Unit)?,
+        resolver: ((String) -> java.net.InetAddress)? = null,
+    ) {
+        protectHook = hook
+        resolveHook = resolver
+    }
+
+    internal fun tunnelConnectionFactory(context: android.content.Context): (java.net.URL) -> java.net.HttpURLConnection {
+        val manager = context.getSystemService(android.net.ConnectivityManager::class.java)
+        val network = manager?.let { connectivity ->
+            connectivity.allNetworks.firstOrNull { network ->
+                connectivity.getNetworkCapabilities(network)
+                    ?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true
+            }
+        }
+        // Capture this network for both probes: losing the tunnel must not silently
+        // turn the survival test into a successful request over Wi-Fi/mobile data.
+        return { url ->
+            val vpn = network ?: throw java.io.IOException("VPN network unavailable")
+            vpn.openConnection(url) as java.net.HttpURLConnection
+        }
+    }
 
     @Volatile private var retestHook: (() -> Unit)? = null
     internal fun setRetestHook(hook: (() -> Unit)?) { retestHook = hook }

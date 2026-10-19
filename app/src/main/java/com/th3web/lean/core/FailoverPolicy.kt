@@ -22,6 +22,31 @@ internal object FailoverPolicy {
     /** Same-profile retries before the policy starts looking elsewhere. */
     const val RETRIES_BEFORE_SWITCH = 2
 
+    class Round {
+        private var profileId: String? = null
+        private val tried = mutableSetOf<String>()
+        var attempts: Int = 0
+            private set
+
+        @Synchronized
+        fun next(failed: String, candidates: List<Profile>): Move {
+            if (profileId != failed) {
+                profileId = failed
+                attempts = 0
+            }
+            attempts++
+            tried += failed
+            return FailoverPolicy.next(failed, attempts, tried, candidates)
+        }
+
+        @Synchronized
+        fun reset() {
+            profileId = null
+            attempts = 0
+            tried.clear()
+        }
+    }
+
     /** Backoff before the next attempt; widens so a hard outage stops burning battery. */
     fun delayMs(attempt: Int): Long = when {
         attempt <= 1 -> 1_500L

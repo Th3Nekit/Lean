@@ -88,6 +88,7 @@ import com.th3web.lean.data.model.Profile
 import com.th3web.lean.data.model.Subscription
 import com.th3web.lean.data.net.PingState
 import com.th3web.lean.data.net.Pinger
+import com.th3web.lean.data.net.SubscriptionHwidRequired
 import com.th3web.lean.data.net.runPingBurst
 import com.th3web.lean.data.parse.ShareLinks
 import com.th3web.lean.data.resolveProfileSelection
@@ -98,6 +99,7 @@ import com.th3web.lean.ui.components.LeanBadge
 import com.th3web.lean.ui.components.PingGlyph
 import com.th3web.lean.ui.components.ServerRow
 import com.th3web.lean.ui.components.SubscriptionCard
+import com.th3web.lean.ui.components.SubscriptionHwidHint
 import com.th3web.lean.ui.components.SubscriptionServerRow
 import com.th3web.lean.ui.components.TelegramPromoBanner
 import com.th3web.lean.ui.components.latencyTier
@@ -335,7 +337,7 @@ fun ServersScreen(onBack: () -> Unit, onNavigate: (String) -> Unit = {}) {
                     currentSettings.pingTimeoutMs,
                     currentSettings.pingUrl,
                     udpService = Pinger.isUdpService(p.outbound),
-                    protect = CoreManager.probeProtect,
+                    protect = CoreManager.probeProtect, resolve = CoreManager.probeResolve,
                     outbound = p.outbound,
                     urlTestProbe = UrlTestPinger::measure,
                 )
@@ -414,7 +416,7 @@ fun ServersScreen(onBack: () -> Unit, onNavigate: (String) -> Unit = {}) {
         scope.launch {
             val ms = Pinger.measure(
                 p.outbound.server, p.outbound.serverPort, settings.pingProtocol, settings.pingTimeoutMs, settings.pingUrl,
-                udpService = Pinger.isUdpService(p.outbound), protect = CoreManager.probeProtect,
+                udpService = Pinger.isUdpService(p.outbound), protect = CoreManager.probeProtect, resolve = CoreManager.probeResolve,
                 outbound = p.outbound, urlTestProbe = UrlTestPinger::measure,
             )
             app.profiles.updateLatency(p.id, ms)
@@ -562,23 +564,7 @@ fun ServersScreen(onBack: () -> Unit, onNavigate: (String) -> Unit = {}) {
             // First on the screen: someone whose panel answered with a placeholder
             // server is looking at the top of this list, not scrolling past the search
             // and the sort chips to find out why.
-            if (!settings.sendHwid && !settings.hwidHintHidden) {
-                item(key = "hwid-hint", contentType = "hint") {
-                    HwidHintCard(
-                        onEnable = {
-                            scope.launch {
-                                app.settings.setSendHwid(true)
-                                store.subscriptions.forEach { s ->
-                                    runCatching { app.profiles.updateSubscription(s.id) }
-                                }
-                            }
-                            toast(tr("Готово. Выключить можно в «Провайдер и пинг»."))
-                        },
-                        onDismiss = { scope.launch { app.settings.setHwidHintHidden(true) } },
-                    )
-                    Spacer(Modifier.height(12.dp))
-                }
-            }
+            item(key = "hwid-hint", contentType = "hint") { SubscriptionHwidHint(showGeneralHint = true) }
 
             // Search / filter pills / sort split into independently-keyed items
             // so a keystroke (query change) only recomposes the search field,
@@ -952,7 +938,9 @@ fun ServersScreen(onBack: () -> Unit, onNavigate: (String) -> Unit = {}) {
                     if (result.isSuccess) {
                         toast(tr("Добавлено серверов: %d").format(result.getOrDefault(0)))
                     } else {
-                        toast(tr("Не удалось получить подписку — добавили её, попробуйте обновить"))
+                        toast(if (result.exceptionOrNull() is SubscriptionHwidRequired) {
+                            tr("Панель требует HWID. Включите отправку и повторите загрузку.")
+                        } else tr("Не удалось получить подписку — добавили её, попробуйте обновить"))
                     }
                 }
             },
@@ -1021,6 +1009,10 @@ fun ServersScreen(onBack: () -> Unit, onNavigate: (String) -> Unit = {}) {
                         if (urlChanged && app.settings.state.value.pingOnUpdate) {
                             pingProfiles(app.profiles.state.value.profiles.filter { it.subscriptionId == sub.id })
                         }
+                    } else if (result.exceptionOrNull() is SubscriptionHwidRequired) {
+                        editSub = null
+                        editSubError = false
+                        toast(tr("Панель требует HWID. Включите отправку и повторите загрузку."))
                     } else {
                         editSubError = true
                     }
@@ -1912,61 +1904,5 @@ private fun FolderCard(
             tint = LeanColors.TextTertiary,
             modifier = Modifier.size(16.dp).rotate(chevron),
         )
-    }
-}
-
-/**
- * The one place the device id is offered, and the only warning on this screen.
- *
- * Lean sends no hardware id, phone model or Android version to a subscription host
- * unless asked to. Some panels only hand out the real list to a device they recognise,
- * and what arrives instead is a single server called "App not supported" — which reads
- * as Lean being broken. Detecting that placeholder is guesswork (every panel words it
- * differently, in whatever language), so the notice simply states the case and quotes
- * the wording people see. Error colours because it explains a fault, not a feature.
- */
-@Composable
-private fun HwidHintCard(onEnable: () -> Unit, onDismiss: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(LeanCorner.Card)
-            .background(scheme.errorContainer)
-            .border(1.dp, scheme.error, LeanCorner.Card)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-    ) {
-        Text(
-            tr("В подписке «Приложение не поддерживается»?"),
-            style = LeanType.rowTitle,
-            color = scheme.onErrorContainer,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            tr("Если вместо серверов пришёл один с надписью «App not supported» или " +
-                "«Приложение не поддерживается» — панель не узнала устройство. Включите " +
-                "отправку HWID: Lean отправит ей идентификатор устройства, модель " +
-                "телефона и версию Android."),
-            style = LeanType.meta,
-            color = scheme.onErrorContainer,
-        )
-        Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Button(
-                onClick = onEnable,
-                shape = MaterialTheme.shapes.medium,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = scheme.error,
-                    contentColor = scheme.onError,
-                ),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-            ) {
-                Text(tr("Включить HWID и обновить"), style = LeanType.meta)
-            }
-            Spacer(Modifier.width(8.dp))
-            TextButton(onClick = onDismiss) {
-                Text(tr("Не надо"), style = LeanType.meta, color = scheme.onErrorContainer)
-            }
-        }
     }
 }

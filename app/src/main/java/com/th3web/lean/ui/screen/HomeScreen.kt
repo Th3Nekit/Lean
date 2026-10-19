@@ -109,6 +109,7 @@ import com.th3web.lean.ui.components.LeanBadge
 import com.th3web.lean.ui.components.LeanDivider
 import com.th3web.lean.ui.components.PingGlyph
 import com.th3web.lean.ui.components.SubscriptionCard
+import com.th3web.lean.ui.components.SubscriptionHwidHint
 import com.th3web.lean.ui.components.SubscriptionServerRow
 import com.th3web.lean.ui.icons.LeanIcon
 import com.th3web.lean.ui.icons.LeanIconImage
@@ -283,6 +284,7 @@ fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
+            item(key = "hwid-hint", contentType = "hint") { SubscriptionHwidHint() }
             item {
                 Spacer(Modifier.height(8.dp))
                 ConnectButton(
@@ -652,10 +654,12 @@ private fun ConnectionCheckButton(check: ConnCheckState, onCheck: () -> Unit) {
         is ConnCheckState.Torn -> tr("рвётся после %d КБ").format(check.kb)
         is ConnCheckState.Timeout -> tr("Таймаут")
         is ConnCheckState.Offline -> tr("Нет интернета")
+        is ConnCheckState.Unverified -> tr("Передача не проверена")
     }
     val tint = when (check) {
         is ConnCheckState.Ok, is ConnCheckState.Survived -> LeanColors.Connected
-        is ConnCheckState.Torn, is ConnCheckState.Timeout, is ConnCheckState.Offline -> MaterialTheme.colorScheme.error
+        is ConnCheckState.Torn, is ConnCheckState.Timeout, is ConnCheckState.Offline,
+        is ConnCheckState.Unverified -> MaterialTheme.colorScheme.error
         is ConnCheckState.Checking, is ConnCheckState.Stressing -> LeanColors.TextSecondary
         else -> MaterialTheme.colorScheme.onSecondaryContainer
     }

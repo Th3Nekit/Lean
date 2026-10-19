@@ -1,11 +1,24 @@
 package com.th3web.lean.data.net
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.coroutineContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * End-to-end connectivity probe for «Проверить соединение» on Home.
@@ -25,18 +38,26 @@ object ConnectionChecker {
         data object NoInternet : CheckResult
     }
 
-    suspend fun check(url: String, timeoutMs: Int = 5_000): CheckResult = withContext(Dispatchers.IO) {
+    suspend fun check(
+        url: String,
+        timeoutMs: Int = 5_000,
+        openConnection: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection },
+    ): CheckResult = withContext(Dispatchers.IO) {
         val started = System.nanoTime()
         try {
-            val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            coroutineContext.ensureActive()
+            val conn = openConnection(URL(url)).apply {
                 connectTimeout = timeoutMs
                 readTimeout = timeoutMs
                 requestMethod = "GET"
                 instanceFollowRedirects = false
+                useCaches = false
+                setRequestProperty("Cache-Control", "no-cache, no-store")
                 setRequestProperty("User-Agent", Http.userAgent)
             }
             try {
                 val code = conn.responseCode
+                coroutineContext.ensureActive()
                 // generate_204-style probes answer 204 (or 200). A 3xx redirect on a
                 // URL that should answer 2xx directly means a captive portal / DPI
                 // stub intercepted us (i.e. no real tunnel), so it must not read as
@@ -51,6 +72,8 @@ object ConnectionChecker {
             } finally {
                 conn.disconnect()
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: SocketTimeoutException) {
             CheckResult.Timeout
         } catch (e: Exception) {
@@ -58,100 +81,118 @@ object ConnectionChecker {
         }
     }
 
-    // ---- Sustained (>16 KB) survival check, v2rayTun-style ----
-
-    /** Default sized endpoint for the survival test; served from beyond the exit. */
     fun stressUrl(bytes: Int): String = "https://speed.cloudflare.com/__down?bytes=$bytes"
 
-    /**
-     * Bytes to pull for the survival test. 256 KB is decisively past the ~16 KB
-     * cliff where RU TSPU tends to tear a proxied connection down (a single small
-     * request/ping sails through, then the stream dies once real data flows).
-     */
     const val SUSTAINED_TARGET_BYTES = 262_144
 
     sealed interface SustainedResult {
-        /** Full payload arrived, the connection survives real data flow. */
         data class Survived(val bytes: Int, val ms: Int, val kbps: Int) : SustainedResult
-        /**
-         * The transfer started (handshake ok, some bytes arrived), then the stream
-         * died before [SUSTAINED_TARGET_BYTES], the classic TSPU teardown after
-         * ~16 KB. [bytes] is how far it got; a small value near the cliff is the tell.
-         */
+        /** A partial transfer; this alone does not identify its cause. */
         data class Torn(val bytes: Int, val ms: Int) : SustainedResult
-        /** Couldn't even start (no 2xx / connect failure), a dead path, not a teardown. */
         data object Failed : SustainedResult
     }
 
+    private val transferWorkers = ThreadPoolExecutor(
+        0, 2, 30L, TimeUnit.SECONDS, SynchronousQueue<Runnable>(),
+        { task -> Thread(task, "lean-transfer-check").apply { isDaemon = true } },
+    )
+
+    private suspend fun runTransfer(
+        cleanup: () -> Unit,
+        block: (isActive: () -> Boolean) -> SustainedResult,
+    ): SustainedResult = suspendCancellableCoroutine { continuation ->
+        try {
+            val future = transferWorkers.submit {
+                if (!continuation.isActive) return@submit
+                try {
+                    continuation.resume(block { continuation.isActive })
+                } catch (error: Throwable) {
+                    if (continuation.isActive) continuation.resumeWithException(error)
+                } finally {
+                    cleanup()
+                }
+            }
+            // disconnect() can itself block. Cleanup stays on the worker, and
+            // an uninterruptible transport cannot create an unbounded queue.
+            continuation.invokeOnCancellation { future.cancel(true) }
+        } catch (_: RejectedExecutionException) {
+            continuation.resume(SustainedResult.Failed)
+        }
+    }
+
     /**
-     * Downloads [targetBytes] from [url] through the active tunnel and reports
-     * whether the whole payload arrived (survived), the stream died mid-transfer
-     * (torn, the TSPU-after-16KB signature), or it never started (failed).
-     *
-     * Unlike [check] (a tiny generate_204 that a single packet satisfies), this
-     * forces real sustained data flow, which is what actually trips the TSPU
-     * teardown a one-shot ping never sees. Runs over the tunnel (no VpnService
-     * .protect), so when connected it measures the proxy path's real endurance.
+     * Checks payload transfer through the supplied route. The timeout covers
+     * connection, response headers and body together; cancellation does not wait
+     * for a blocking transport to close. No subscription identifiers are sent.
      */
     suspend fun sustainedCheck(
         url: String = stressUrl(SUSTAINED_TARGET_BYTES),
         targetBytes: Int = SUSTAINED_TARGET_BYTES,
         timeoutMs: Int = 15_000,
-    ): SustainedResult = withContext(Dispatchers.IO) {
+        openConnection: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection },
+    ): SustainedResult {
+        if (targetBytes <= 0 || timeoutMs <= 0) return SustainedResult.Failed
         val started = System.nanoTime()
-        var conn: HttpURLConnection? = null
-        try {
-            conn = (URL(url).openConnection() as HttpURLConnection).apply {
-                connectTimeout = timeoutMs
-                readTimeout = timeoutMs
-                requestMethod = "GET"
-                instanceFollowRedirects = false
-                setRequestProperty("User-Agent", Http.userAgent)
-                setRequestProperty("Accept", "*/*")
-            }
-            val code = conn.responseCode
-            if (code != 200 && code != 206) return@withContext SustainedResult.Failed
-            var total = 0
-            val buf = ByteArray(16 * 1024)
-            // readTimeout bounds each read(), not the whole transfer, so a slow-trickle
-            // server (a byte before every timeout) could stall for targetBytes/rate. Cap
-            // the whole download by a wall-clock deadline; not reaching target in time is
-            // itself the "doesn't sustain" signal (-> Torn below).
-            val deadline = started + timeoutMs * 1_000_000L
-            val torn = try {
-                conn.inputStream.use { input ->
-                    while (total < targetBytes) {
-                        if (System.nanoTime() > deadline) break
-                        val n = input.read(buf)
-                        if (n < 0) break // EOF: if before target, the stream was cut short
-                        total += n
-                    }
-                }
-                false
-            } catch (e: IOException) {
-                // Mid-stream I/O failure after a clean handshake = teardown, not a
-                // dead path, report how far we got.
-                true
-            }
-            val ms = ((System.nanoTime() - started) / 1_000_000L).toInt().coerceAtLeast(1)
-            when {
-                total >= targetBytes -> {
-                    val kbps = ((total.toLong() * 1000L) / (ms.toLong() * 1024L)).toInt()
-                    SustainedResult.Survived(total, ms, kbps.coerceAtLeast(1))
-                }
-                total > 0 -> SustainedResult.Torn(total, ms) // premature EOF or mid-stream error
-                else -> SustainedResult.Failed
-            }
-        } catch (e: SocketTimeoutException) {
-            // A timeout mid-transfer (after 2xx) reads as a teardown; a connect-time
-            // timeout leaves conn.responseCode unreached and lands here too, treat as
-            // failed-to-start only if nothing was read. We can't tell them apart here,
-            // so be conservative: no bytes counted -> Failed.
-            SustainedResult.Failed
-        } catch (e: Exception) {
-            SustainedResult.Failed
-        } finally {
-            conn?.disconnect()
+        val deadline = started + timeoutMs * 1_000_000L
+        val transferred = AtomicInteger()
+        fun elapsedMs() = ((System.nanoTime() - started) / 1_000_000L).coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+        fun incomplete(): SustainedResult {
+            val bytes = transferred.get()
+            return if (bytes > 0) SustainedResult.Torn(bytes, elapsedMs()) else SustainedResult.Failed
         }
+        return withTimeoutOrNull(timeoutMs.toLong()) {
+            var conn: HttpURLConnection? = null
+            var input: InputStream? = null
+            runTransfer(cleanup = {
+                try {
+                    input?.close()
+                } finally {
+                    conn?.disconnect()
+                }
+            }) { isActive ->
+                try {
+                    if (!isActive()) return@runTransfer SustainedResult.Failed
+                    val connection = openConnection(URL(url))
+                    conn = connection
+                    val remaining = deadline - System.nanoTime()
+                    if (remaining <= 0 || !isActive()) return@runTransfer incomplete()
+                    val socketTimeout = (remaining / 1_000_000L).coerceIn(1L, timeoutMs.toLong()).toInt()
+                    connection.apply {
+                        connectTimeout = socketTimeout
+                        readTimeout = socketTimeout
+                        requestMethod = "GET"
+                        instanceFollowRedirects = false
+                        useCaches = false
+                        setRequestProperty("Cache-Control", "no-cache, no-store")
+                        setRequestProperty("User-Agent", Http.userAgent)
+                        setRequestProperty("Accept", "*/*")
+                    }
+                    val code = connection.responseCode
+                    if (code != 200 && code != 206) return@runTransfer SustainedResult.Failed
+                    val buf = ByteArray(16 * 1024)
+                    try {
+                        val stream = connection.inputStream
+                        input = stream
+                        while (transferred.get() < targetBytes && isActive() && System.nanoTime() < deadline) {
+                            val n = stream.read(buf, 0, minOf(buf.size, targetBytes - transferred.get()))
+                            if (n < 0) break
+                            transferred.addAndGet(n)
+                        }
+                    } catch (_: IOException) {
+                        // Preserve the byte count for a partial response.
+                    }
+                    val total = transferred.get()
+                    if (total >= targetBytes && isActive() && System.nanoTime() <= deadline) {
+                        val ms = elapsedMs()
+                        val kbps = (total.toLong() * 1000L / (ms.toLong() * 1024L)).coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+                        SustainedResult.Survived(total, ms, kbps)
+                    } else incomplete()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    incomplete()
+                }
+            }
+        } ?: incomplete()
     }
 }

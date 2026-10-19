@@ -3,7 +3,9 @@ package com.th3web.lean.core
 import java.io.File
 import java.io.RandomAccessFile
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -42,10 +44,13 @@ class CoreStatusClient(
      * once per escalation, and only after a reset has been tried and given time.
      */
     private val requestRestart: () -> Unit = {},
+    private val verifyTransfer: suspend () -> Boolean? = { null },
+    private val onHealthy: () -> Unit = {},
 ) {
     private val job = SupervisorJob(parentScope.coroutineContext[Job])
     private val scope = CoroutineScope(Dispatchers.IO + job)
     private val closed = AtomicBoolean(false)
+    private val selectionRevision = AtomicLong()
     private val accumulator = TrafficAccumulator(System.nanoTime())
     private val logTail = NativeLogTail(File(cacheDir, "neko.log"))
     /**
@@ -91,6 +96,7 @@ class CoreStatusClient(
         CoreManager.setRetestHook {
             if (isLive()) {
                 scope.launch {
+                    val revision = selectionRevision.get()
                     // The native urlTest measures whatever outbound the box is currently
                     // routing through, so its result belongs to the SELECTED node, and
                     // publishing it is the only way any node ever gets a real live delay.
@@ -98,7 +104,7 @@ class CoreStatusClient(
                     // the rows render as ✗ rather than as a latency.
                     val measured = runCatching { box.urlTest(TEST_URL, TEST_TIMEOUT_MS) }
                         .getOrDefault(-1)
-                    if (!isLive()) return@launch
+                    if (!isLive() || selectionRevision.get() != revision) return@launch
                     CoreManager.setGroups(
                         CoreManager.groups.value.map { group ->
                             group.copy(
@@ -189,7 +195,8 @@ class CoreStatusClient(
      *
      * The probe itself is the live core's own `urlTest`, i.e. a real generate_204 through
      * the selected outbound. It is the same call «Проверить текущий маршрут» makes, so it
-     * measures the tunnel rather than the phone's connectivity.
+     * measures the tunnel rather than the phone's connectivity. A successful ping is
+     * followed by a sustained transfer before the session is considered healthy.
      */
     private fun maybeProbeHealth() {
         if (!healthCheckEnabled() || corePaused()) return
@@ -222,14 +229,31 @@ class CoreStatusClient(
 
     /** The probe itself, on its own coroutine. See [maybeProbeHealth]. */
     private suspend fun runProbe() {
+        if (!canProbeHealth()) return
+        val revision = selectionRevision.get()
         val measured = withContext(Dispatchers.IO) {
             runCatching { box.urlTest(TEST_URL, TunnelHealthCheck.PROBE_TIMEOUT_MS) }
                 .getOrDefault(-1)
         }
-        if (!isLive()) return
-        when (health.onProbe(ok = measured >= 0)) {
+        if (!canProbeHealth() || selectionRevision.get() != revision) {
+            health.reset()
+            return
+        }
+        val survived = if (measured < 0) false else try {
+            verifyTransfer()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            null
+        }
+        if (!canProbeHealth() || selectionRevision.get() != revision || survived == null) {
+            health.reset()
+            return
+        }
+        if (survived) onHealthy()
+        when (health.onProbe(ok = survived)) {
             TunnelHealthCheck.Action.None ->
-                if (measured < 0) {
+                if (!survived) {
                     CoreManager.appendLog(
                         tr("⚠ проверка туннеля не прошла (%d подряд)").format(health.failures),
                     )
@@ -257,6 +281,7 @@ class CoreStatusClient(
 
     fun selectorChanged(tag: String, selected: String) {
         if (!isLive()) return
+        selectionRevision.incrementAndGet()
         CoreManager.setGroups(
             CoreManager.groups.value.map { group ->
                 if (group.tag == tag || group.tag == "auto" && tag == "proxy") {
@@ -290,6 +315,8 @@ class CoreStatusClient(
     }
 
     private fun isLive(): Boolean = !closed.get() && isCurrent(generation)
+
+    private fun canProbeHealth(): Boolean = isLive() && healthCheckEnabled() && !corePaused()
 
     private companion object {
         const val STATUS_INTERVAL_MS = 1_000L

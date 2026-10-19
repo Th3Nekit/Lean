@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -16,6 +17,7 @@ import com.th3web.lean.data.model.Folder
 import com.th3web.lean.data.model.Profile
 import com.th3web.lean.data.model.Subscription
 import com.th3web.lean.data.net.Http
+import com.th3web.lean.data.net.SubscriptionHwidRequired
 import com.th3web.lean.data.parse.ProxyConfigFiles
 import com.th3web.lean.data.parse.ShareLinks
 import com.th3web.lean.data.parse.SubscriptionMeta
@@ -59,6 +61,30 @@ class ProfileRepository(context: Context) {
 
     private val _state = MutableStateFlow(loadBlocking())
     val state: StateFlow<StoreData> = _state.asStateFlow()
+
+    data class HwidRetry(val subscriptionId: String, val name: String, val url: String, val attempt: Long = System.nanoTime())
+    private val _hwidFailures = MutableStateFlow<Map<String, HwidRetry>>(emptyMap())
+    val hwidFailures: StateFlow<Map<String, HwidRetry>> = _hwidFailures.asStateFlow()
+
+    private fun Result<Int>.recordHwidFailure(sub: Subscription, name: String = sub.name, url: String = sub.url): Result<Int> {
+        if (exceptionOrNull() is SubscriptionHwidRequired &&
+            _state.value.subscriptions.any { it.id == sub.id }
+        ) {
+            _hwidFailures.update { it + (sub.id to HwidRetry(sub.id, name, url)) }
+        } else if (isSuccess) {
+            dismissHwidFailure(sub.id)
+        }
+        return this
+    }
+
+    fun dismissHwidFailure(id: String) { _hwidFailures.update { it - id } }
+
+    suspend fun retryHwidFailure(retry: HwidRetry): Result<Int> {
+        val sub = _state.value.subscriptions.find { it.id == retry.subscriptionId }
+            ?: return Result.failure(IllegalArgumentException("subscription not found"))
+        return if (retry.url != sub.url) editSubscription(sub.id, retry.name, retry.url)
+        else updateSubscription(sub.id)
+    }
 
     private fun loadBlocking(): StoreData {
         // Delegates to the Context-free [StoreCodec], which falls back to the .bak when
@@ -326,13 +352,15 @@ class ProfileRepository(context: Context) {
         // Safe-call, not smart cast: `parsed` is mutated by the closure below.
         if (parsed?.profiles.isNullOrEmpty()) {
             Http.getFull(url, userAgentOverride = FALLBACK_UA).onSuccess { retryResp ->
-                val retryParsed = runCatching { Subscriptions.parseBodyFull(retryResp.body) }.getOrNull()
+                val retryParsed = runCatching { Subscriptions.parseBodyFull(retryResp.body) }
+                    .onFailure { if (it is SubscriptionHwidRequired || parseError == null) parseError = it }
+                    .getOrNull()
                 if (retryParsed != null && retryParsed.profiles.size > (parsed?.profiles?.size ?: 0)) {
                     resp = retryResp
                     parsed = retryParsed
                     winnerUa = FALLBACK_UA
                 }
-            }
+            }.onFailure { if (it is SubscriptionHwidRequired || parseError == null) parseError = it }
         }
         // A transient panel hiccup (mid-refresh backend inconsistency, a brief rate
         // limit, a truncated response) can come back 200 OK with a real but tiny
@@ -363,7 +391,7 @@ class ProfileRepository(context: Context) {
         // existing servers are kept.
         if (r == null || p == null || p.profiles.isEmpty()) {
             return Result.failure(
-                primary.exceptionOrNull() ?: parseError
+                (parseError as? SubscriptionHwidRequired) ?: primary.exceptionOrNull() ?: parseError
                     ?: IllegalStateException("subscription body yielded no servers"),
             )
         }
@@ -478,7 +506,7 @@ class ProfileRepository(context: Context) {
                 )
             }
             f.profiles.size
-        }
+        }.recordHwidFailure(sub)
     }
 
     /** When the last automatic sweep ran, so two entry points cannot double-fetch. */
@@ -521,7 +549,7 @@ class ProfileRepository(context: Context) {
                 )
             }
             f.profiles.size
-        }
+        }.recordHwidFailure(sub)
     }
 
     /**
@@ -560,14 +588,17 @@ class ProfileRepository(context: Context) {
                 )
             }
             f.profiles.size
-        }
+        }.recordHwidFailure(sub, newName, newUrl)
     }
 
-    suspend fun deleteSubscription(id: String, keepProfiles: Boolean = false) = update { s ->
-        s.copy(
-            subscriptions = s.subscriptions.filterNot { it.id == id },
-            profiles = if (keepProfiles) s.profiles else s.profiles.filterNot { it.subscriptionId == id },
-        )
+    suspend fun deleteSubscription(id: String, keepProfiles: Boolean = false) {
+        update { s ->
+            s.copy(
+                subscriptions = s.subscriptions.filterNot { it.id == id },
+                profiles = if (keepProfiles) s.profiles else s.profiles.filterNot { it.subscriptionId == id },
+            )
+        }
+        dismissHwidFailure(id)
     }
 
     // ---- folders ----

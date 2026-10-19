@@ -69,7 +69,7 @@ class SubscriptionRefreshWorker(
                             async {
                                 p.id to Pinger.measure(
                                     p.outbound.server, p.outbound.serverPort, s.pingProtocol, s.pingTimeoutMs, s.pingUrl,
-                                    udpService = Pinger.isUdpService(p.outbound), protect = CoreManager.probeProtect,
+                                    udpService = Pinger.isUdpService(p.outbound), protect = CoreManager.probeProtect, resolve = CoreManager.probeResolve,
                                     outbound = p.outbound, urlTestProbe = UrlTestPinger::measure,
                                 )
                             }

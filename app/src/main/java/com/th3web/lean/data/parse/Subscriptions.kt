@@ -1,6 +1,7 @@
 package com.th3web.lean.data.parse
 
 import com.th3web.lean.data.model.Profile
+import com.th3web.lean.data.net.SubscriptionHwidRequired
 
 /**
  * Parses a subscription body into profiles. Subscription bodies are commonly a
@@ -17,7 +18,11 @@ object Subscriptions {
     )
 
     /** Back-compat wrapper; existing call-sites (importFromText) keep working. */
-    fun parseBody(body: String): List<Profile> = parseBodyFull(body).profiles
+    fun parseBody(body: String): List<Profile> = try {
+        parseBodyFull(body).profiles
+    } catch (_: SubscriptionHwidRequired) {
+        emptyList()
+    }
 
     fun parseBodyFull(body: String): ParsedSubscription {
         val text = decodeBody(body)
@@ -37,10 +42,12 @@ object Subscriptions {
         // surfaces after the base64 decode above; checking only the raw text missed it
         // and fell through to the (then empty) share-link tokenizer.
         for (sniffSrc in candidates) {
+            if (SubscriptionHwidRequired.isRejectionBody(sniffSrc)) throw SubscriptionHwidRequired()
             val sniff = sniffSrc.removePrefix("\uFEFF")
             if (sniff.startsWith("[") || sniff.startsWith("{")) {
                 val jsonProfiles = XrayConfig.parse(sniff)
                 if (jsonProfiles.isNotEmpty()) {
+                    rejectPlaceholder(jsonProfiles)
                     return ParsedSubscription(jsonProfiles, BodyDirectives())
                 }
             }
@@ -59,10 +66,17 @@ object Subscriptions {
                 .mapNotNull { ShareLinks.parse(it) }
             val profiles = shareProfiles + wgProfiles
             if (profiles.isNotEmpty() || directives != BodyDirectives()) {
+                rejectPlaceholder(profiles)
                 return ParsedSubscription(profiles, directives)
             }
         }
         return ParsedSubscription(emptyList(), BodyDirectives())
+    }
+
+    private fun rejectPlaceholder(profiles: List<Profile>) {
+        if (profiles.isNotEmpty() && profiles.all { SubscriptionHwidRequired.isRejectionName(it.name) }) {
+            throw SubscriptionHwidRequired()
+        }
     }
 
     /**

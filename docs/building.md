@@ -43,32 +43,23 @@ Release builds must include `native/versions.lock` and `THIRD_PARTY_NOTICES.md` 
 
 ## Product flavours
 
-The application builds in two shapes, and the difference is what native
-executables come with it.
+The distribution flavour controls bundled native helpers and default settings.
 
-| Flavour | What it carries | Where it goes |
+| Flavour | Native helpers | Defaults |
 |---|---|---|
-| `full` | everything, with the helpers taken from upstream releases | GitHub releases, the project site |
-| `foss` | everything except NaiveProxy, all of it built from source | F-Droid |
+| `full` | Includes NaiveProxy; helper downloads are pinned in `native/versions.lock` | Project promotion and automatic update checks enabled |
+| `foss` | Omits NaiveProxy; build Mieru, Xray and olcRTC from the pinned sources | Project promotion and automatic update checks disabled |
 
-The difference is where the helper executables come from, not how many there
-are. `full` downloads them from upstream releases, pinned by sha256 in
-`native/versions.lock`; `foss` compiles Mieru, Xray and olcRTC from pinned
-sources, because a build that downloads prebuilt executables is not a build from
-source and F-Droid will not carry one.
+NaiveProxy is packaged from `app/src/full/jniLibs/`. Other helpers are packaged
+from `app/src/main/jniLibs/`; prepare them with `native/build-linux.sh plugins`
+for a source build. `NativePlugin.binary()` returns null when the requested
+helper is absent, and the server row reports that it is unavailable.
 
-NaiveProxy lands in `app/src/full/jniLibs/`, a source set only the `full` variant
-reads, which is how it stays out of `foss`. Everything else lives in
-`app/src/main/jniLibs/` and is packaged by both.
-
-NaiveProxy is the exception in `foss`. It is a Chromium fork rather than a Go
-program, and building it needs depot_tools, tens of gigabytes and hours — more
-than any ordinary build server will spend. `NativePlugin.binary()` answers null
-for it, and the server row says so instead of failing at connect time.
+The manual update check remains available in both flavours.
 
 ```bash
-./gradlew assembleFullRelease   # the published build
-./gradlew assembleFossRelease   # the F-Droid build
+./gradlew assembleFullRelease
+./gradlew assembleFossRelease
 ```
 
 ## Native cores from source, on Linux

@@ -16,6 +16,8 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import java.io.FileDescriptor
+import java.io.IOException
+import java.net.InetAddress
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +67,7 @@ import com.th3web.lean.core.tun.AwgTunSpec
 import com.th3web.lean.core.tun.TunRuntimePolicy
 import com.th3web.lean.core.tun.VpnTunController
 import com.th3web.lean.data.Settings
+import com.th3web.lean.data.net.ConnectionChecker
 import com.th3web.lean.data.model.Outbound
 import com.th3web.lean.data.model.Profile
 import com.th3web.lean.data.resolveProfileSelection
@@ -182,6 +185,7 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
 
                 override fun removeForeground() {
                     stopNotificationUpdates()
+                    if (failoverJob?.isActive == true) return
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
                 }
@@ -349,49 +353,49 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
     // Which profile this round is fighting for, how many times it has failed, and who
     // has already been tried, reset whenever the user connects by hand, so a fresh
     // choice always gets the full retry budget.
-    private var failoverProfileId: String? = null
-    private var failoverAttempts: Int = 0
-    private val failoverTried = mutableSetOf<String>()
-    private var failoverJob: Job? = null
+    private val failoverRound = FailoverPolicy.Round()
+    @Volatile private var requestedGeneration = 0L
+    @Volatile private var failoverJob: Job? = null
 
     /** Forget the round. Called on a user-driven connect and on any clean stop. */
+    @Synchronized
     private fun resetFailover() {
         failoverJob?.cancel()
         failoverJob = null
-        failoverProfileId = null
-        failoverAttempts = 0
-        failoverTried.clear()
+        failoverRound.reset()
     }
 
     /**
      * Reacts to a connection that failed, when the user has opted in.
      *
-     * Driven off the failure path rather than off a traffic watchdog: a
-     * tunnel that is up but carrying nothing is a much harder thing to judge (idle looks
-     * identical to broken), and acting on a wrong judgement would disconnect a working
-     * VPN. A failure is unambiguous.
+     * Start failures and repeated end-to-end probe failures enter the same round.
+     * Idle traffic counters alone never trigger a recovery.
      */
-    private fun onConnectionFailed() {
-        if (activeSettings?.autoFailover != true) return
+    @Synchronized
+    private fun onConnectionFailed(allowRecovery: Boolean = false) {
+        val autoFailover = LeanApp.instance.settings.state.value.autoFailover
+        if (!autoFailover && !(allowRecovery && autoRecoverEnabled)) return
+        if (failoverJob?.isActive == true) return
         val current = activeProfileId ?: return
-        if (current != failoverProfileId) {
-            // A different profile than the one we were retrying: start a fresh round.
-            failoverProfileId = current
-            failoverAttempts = 0
-            failoverTried.clear()
-        }
-        failoverAttempts++
-        failoverTried += current
+        val generation = requestedGeneration
+        if (!coordinator.isCurrentGeneration(generation)) return
         val profiles = LeanApp.instance.profiles.state.value.profiles
-        val move = FailoverPolicy.next(current, failoverAttempts, failoverTried, profiles)
-        val wait = FailoverPolicy.delayMs(failoverAttempts)
-        failoverJob?.cancel()
+        val move = failoverRound.next(current, if (autoFailover) profiles else emptyList())
+        val wait = FailoverPolicy.delayMs(failoverRound.attempts)
         failoverJob = scope.launch {
             delay(wait)
-            if (serviceDestroyed || activeSettings?.autoFailover != true) return@launch
+            if (serviceDestroyed || !coordinator.isCurrentGeneration(generation)) return@launch
+            val failoverEnabled = LeanApp.instance.settings.state.value.autoFailover
+            if (!failoverEnabled && !(allowRecovery && autoRecoverEnabled)) {
+                if (CoreManager.state.value is VpnState.Error) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
+                return@launch
+            }
             when (move) {
                 is FailoverPolicy.Move.Retry -> {
-                    CoreManager.appendLog(tr("↻ автопереключение: повтор подключения"))
+                    CoreManager.appendLog(tr("↻ повтор подключения после неудачной проверки"))
                     // restart = true: reconnecting to the profile you are already on is
                     // a deliberate no-op in the coordinator, which would make every
                     // retry silently do nothing.
@@ -400,34 +404,24 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
                     )
                 }
                 is FailoverPolicy.Move.Switch -> {
+                    if (!failoverEnabled) return@launch
                     val name = profiles.firstOrNull { it.id == move.to }?.name.orEmpty()
                     CoreManager.appendLog(tr("↻ автопереключение: переход на «%s»").format(name))
                     coordinator.submit(DesiredConnection.Running(profileId = move.to))
                 }
                 FailoverPolicy.Move.Stop -> {
-                    CoreManager.appendLog(tr("✖ автопереключение: рабочих серверов не осталось"))
+                    CoreManager.appendLog(tr("✖ попытки восстановления закончились — выберите сервер вручную"))
                     resetFailover()
+                    coordinator.submit(DesiredConnection.Stopped)
                 }
             }
         }
     }
 
-    /**
-     * Rebuilds the core for the profile that is live right now.
-     *
-     * The last rung of [TunnelHealthCheck]'s ladder: the tunnel failed repeated probes
-     * through itself and a connection reset did not revive it, so the core is replaced.
-     * restart = true because reconnecting to the profile you are already on is a
-     * deliberate no-op in the coordinator, which is exactly what this must not be.
-     *
-     * Guarded on the generation, so a probe whose verdict arrives after the user already
-     * switched servers (or disconnected) cannot resurrect the session they left.
-     */
-    private fun restartCurrentProfile(generation: Long) {
-        if (serviceDestroyed) return
-        if (!coordinator.isCurrentGeneration(generation)) return
-        val profileId = activeProfileId ?: return
-        coordinator.submit(DesiredConnection.Running(profileId = profileId, restart = true))
+    private fun recoverUnhealthyProfile(generation: Long) {
+        if (serviceDestroyed || !coordinator.isCurrentGeneration(generation)) return
+        if (networkMonitor.currentNetwork() == null || dozePause.paused) return
+        onConnectionFailed(allowRecovery = true)
     }
 
     /**
@@ -756,6 +750,8 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
             idleReceiver = null
             runCatching { unregisterReceiver(receiver) }
         }
+        resetFailover()
+        CoreManager.setProtectHook(null)
         runCatching { networkMonitor.close() }
         runCatching { tunController.close() }
         // Unconditional, like the releases around it: a wake lock outliving the service
@@ -810,6 +806,8 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
     private suspend fun resolveProfiles(command: ConnectionCommand): List<Profile> {
         val desired = command.desired as? DesiredConnection.Running
             ?: throw IllegalArgumentException("Нельзя выбрать профиль для команды остановки")
+        requestedGeneration = command.generation
+        activeProfileId = desired.profileId
         return resolveProfiles(desired.profileId)
     }
 
@@ -922,10 +920,22 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
             box = box,
             profiles = config.profiles,
             cacheDir = cacheDir,
-            healthCheckEnabled = { autoRecoverEnabled },
+            healthCheckEnabled = {
+                (autoRecoverEnabled || LeanApp.instance.settings.state.value.autoFailover) &&
+                    networkMonitor.currentNetwork() != null
+            },
             // A paused core carries nothing on purpose, so its silence is not a fault.
             corePaused = { dozePause.paused },
-            requestRestart = { restartCurrentProfile(generation) },
+            requestRestart = { recoverUnhealthyProfile(generation) },
+            verifyTransfer = {
+                val connection = CoreManager.tunnelConnectionFactory(this)
+                when (ConnectionChecker.sustainedCheck(openConnection = connection)) {
+                    is ConnectionChecker.SustainedResult.Survived -> true
+                    is ConnectionChecker.SustainedResult.Torn -> false
+                    ConnectionChecker.SustainedResult.Failed -> null
+                }
+            },
+            onHealthy = { onHealthyConnection(generation) },
         )
         statusClient = status
         activeBox = box
@@ -936,7 +946,7 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
         connectedAtMillis = System.currentTimeMillis()
         tunnelWakeLock.sessionStarted()
         outageLog.sessionStarted(connectedName)
-        CoreManager.setProtectHook(::protectRawFd)
+        CoreManager.setProtectHook(::protectRawFd, ::resolveProbeHost)
         scope.launch { LeanApp.instance.settings.setSelectedProfile(config.profileId) }
         val description = if (config.profileId == CoreManager.AUTO_PROFILE_ID) {
             tr("▶ Авто · быстрейший (%d серверов)").format(config.profiles.size)
@@ -963,6 +973,7 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
     ): AwgSessionObserver =
         awgStartPublisher.publish(generation, profile.id) { settings ->
             activeSettings = settings
+            activeProfileId = profile.id
             // Real counters exist for AmneziaWG now (see [pollAwgTraffic]), so the speed
             // line in the notification is no longer forced off for it.
             showSpeed = settings.showSpeedInNotification
@@ -971,16 +982,75 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
             // Same hook the sing-box path installs. Without it every per-server probe
             // runs inside the AmneziaWG tunnel, so each row measures "me → WG exit →
             // server", poisoning the sort order and the «Авто» prediction with it.
-            CoreManager.setProtectHook(::protectRawFd)
+            CoreManager.setProtectHook(::protectRawFd, ::resolveProbeHost)
             CoreManager.appendLog("▶ ${profile.name} (AmneziaWG)")
             tunnelWakeLock.sessionStarted()
             outageLog.sessionStarted(profile.name)
             val traffic = scope.launch { pollAwgTraffic(generation, handle) }
+            val health = scope.launch { checkAwgHealth(generation) }
             AwgSessionObserver {
                 traffic.cancel()
+                health.cancel()
                 tunnelWakeLock.sessionStopped()
             }
         }
+
+    @Synchronized
+    private fun onHealthyConnection(generation: Long) {
+        if (serviceDestroyed || activeGeneration != generation ||
+            !coordinator.isCurrentGeneration(generation) || failoverJob?.isActive == true
+        ) return
+        failoverRound.reset()
+    }
+
+    private suspend fun checkAwgHealth(generation: Long) {
+        val health = TunnelHealthCheck()
+        delay(8_000L)
+        while (activeGeneration == generation && coordinator.isCurrentGeneration(generation)) {
+            val settings = LeanApp.instance.settings.state.value
+            if ((!autoRecoverEnabled && !settings.autoFailover) ||
+                networkMonitor.currentNetwork() == null || (dozePauseEnabled && deviceIsIdle())
+            ) {
+                health.reset()
+                delay(20_000L)
+                continue
+            }
+            val connection = CoreManager.tunnelConnectionFactory(this)
+            val reachable = ConnectionChecker.check(settings.pingUrl, openConnection = connection)
+            val survived = if (reachable !is ConnectionChecker.CheckResult.Ok) false else
+                when (ConnectionChecker.sustainedCheck(openConnection = connection)) {
+                    is ConnectionChecker.SustainedResult.Survived -> true
+                    is ConnectionChecker.SustainedResult.Torn -> false
+                    ConnectionChecker.SustainedResult.Failed -> null
+                }
+            if (activeGeneration != generation || !coordinator.isCurrentGeneration(generation)) return
+            if (networkMonitor.currentNetwork() == null) {
+                health.reset()
+                delay(20_000L)
+                continue
+            }
+            if (survived == null) {
+                health.reset()
+                delay(TunnelHealthCheck.IDLE_BEFORE_PROBE_MS)
+                continue
+            }
+            if (survived) onHealthyConnection(generation)
+            when (health.onProbe(survived)) {
+                TunnelHealthCheck.Action.Reset ->
+                    CoreManager.appendLog(tr("⚠ WARP: проверка передачи не пройдена, повтор проверки"))
+                TunnelHealthCheck.Action.Restart -> {
+                    CoreManager.appendLog(tr("⚠ WARP: повторные ошибки передачи, восстановление подключения"))
+                    recoverUnhealthyProfile(generation)
+                }
+                TunnelHealthCheck.Action.None -> Unit
+            }
+            delay(if (!survived) 20_000L else if (LeanForeground.visible) {
+                TunnelHealthCheck.IDLE_BEFORE_PROBE_MS
+            } else {
+                TunnelHealthCheck.IDLE_BEFORE_PROBE_IDLE_MS
+            })
+        }
+    }
 
     /**
      * Publishes ↓/↑ for an AmneziaWG session.
@@ -1159,18 +1229,17 @@ class LeanVpnService : VpnService(), NativeServiceBridge {
     /**
      * Protects a probe socket (per-server ping) from the tunnel.
      *
-     * Best-effort: a failure must not abort the probe, [Pinger] then measures the proxied
-     * path instead of the real one, but it is logged rather than swallowed, because
-     * "the ping went through the VPN" is otherwise a symptom with no signal behind it.
+     * A failed protection aborts the probe rather than timing the VPN egress.
      */
     private fun protectRawFd(fd: FileDescriptor) {
-        runCatching {
-            ParcelFileDescriptor.dup(fd).use { duplicate ->
-                protectSocket(duplicate.fd)
-            }
-        }.onFailure { e ->
-            Log.w(TAG, "probe protect() failed — this ping will run through the tunnel", e)
+        ParcelFileDescriptor.dup(fd).use { duplicate ->
+            if (!protect(duplicate.fd)) throw IOException("Probe socket protection failed")
         }
+    }
+
+    private fun resolveProbeHost(host: String): InetAddress {
+        val physical = networkMonitor.currentNetwork() ?: throw IOException("Physical network unavailable")
+        return physical.getAllByName(host).firstOrNull() ?: throw IOException("Probe address unavailable")
     }
 
     private fun notification(text: String): Notification = baseBuilder().setContentText(text).build()

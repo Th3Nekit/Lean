@@ -5,10 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// F-Droid publishes one APK per version code, so the app is submitted there as four
-// builds, one per ABI. The digit each ABI adds fixes their order — armeabi-v7a first,
-// x86_64 last — and multiplying by ten leaves room for it while keeping a newer release
-// above an older one whatever its ABI.
+// ABI suffixes keep version codes unique while preserving release order.
 val abiVersionDigits = mapOf(
     "armeabi-v7a" to 1,
     "arm64-v8a" to 2,
@@ -25,16 +22,9 @@ android {
         applicationId = "com.th3web.lean"
         minSdk = 24
         targetSdk = 35
-        // 1.2.0 — the "why is it not working" release: «Скорость» (a speed test with a
-        // tunnel-versus-direct comparison on one and the same server), «Что работает
-        // сейчас» (per-service reachability), «Почему не работает» (DPI probes), and two
-        // defences against the most reported fault of all, a VPN that switched itself
-        // off — a wake lock held while the tunnel is up and an idle health probe that
-        // reconnects one that has gone silent. versionCode keeps its own monotonic count
-        // (installers order by it, never by the name), so it continues from the 0.9.x CI
-        // series rather than restarting at 1.
-        versionCode = 36
-        versionName = "1.2.0"
+        // Continue the monotonic versionCode sequence used by earlier releases.
+        versionCode = 37
+        versionName = "1.2.1"
 
         // Packaging one ABI is what makes the APK single-ABI; the split below is off in
         // that case, so there is nothing else narrowing it down.
@@ -47,52 +37,26 @@ android {
         }
     }
 
-    // Two ways to ship the same application.
-    //
-    // `full` is the build published on GitHub and the site. It carries the helper
-    // executables (NaiveProxy, Mieru, Xray, olcRTC) that some protocols need, and those
-    // arrive as upstream release downloads pinned by sha256 in native/versions.lock.
-    //
-    // `foss` exists because a build that downloads prebuilt executables is not a build
-    // from source, and F-Droid will not carry one. It contains only what this repository
-    // can build from source on a Linux machine: the app, libcore (sing-box) and
-    // AmneziaWG-Go. The protocols that need a helper are then unavailable, and the app
-    // already says so per server rather than failing at connect time.
+    // `full` includes NaiveProxy; `foss` uses helpers built from pinned sources.
     flavorDimensions += "distribution"
     productFlavors {
         create("full") {
             dimension = "distribution"
             isDefault = true
-            // The build handed out on GitHub and 4PDA, where pointing at the author's own
-            // service is fair. F-Droid is someone else's catalogue: an app that arrives
-            // from it advertising a paid subscription is an anti-feature there, and
-            // rightly so, so the foss build has no promotion in it at all.
+            // Promotion is disabled in the foss flavour.
             buildConfigField("boolean", "SHOWS_PROMO", "true")
-            // The launch-time GitHub release check defaults ON here and OFF in `foss`.
-            // F-Droid updates its own apps, so a build that arrives from it has no use
-            // for the check, and reaching api.github.com on a first launch — before the
-            // user has opened a single screen, let alone chosen anything — is exactly
-            // the kind of unrequested outgoing contact F-Droid treats as an anti-feature.
-            // The manual «Проверить обновления» button stays in both builds.
+            // Manual update checks remain available in both flavours.
             buildConfigField("boolean", "UPDATE_CHECK_DEFAULT", "true")
         }
         create("foss") {
             dimension = "distribution"
             buildConfigField("boolean", "SHOWS_PROMO", "false")
             buildConfigField("boolean", "UPDATE_CHECK_DEFAULT", "false")
-            // Only NaiveProxy is absent, and only because it cannot be built from source
-            // on an ordinary build server: it is a Chromium fork, not a Go program.
-            // Mieru, Xray and olcRTC are built from pinned sources by
-            // native/build-linux.sh, so this flavour carries them.
-            //
-            // The exclusion is done with source sets below, not with a packaging rule:
-            // AGP has no per-flavour `packaging` block, and writing one inside a flavour
-            // silently resolves to the android-level block through Kotlin's implicit
-            // receiver — which excludes the file from every flavour, quietly.
-            //
-            // NativePlugin.binary() answers null for the missing one, which the UI
-            // reports per server as "нет сборки для этой архитектуры" rather than
-            // failing at connect time.
+            // Mieru, Xray and olcRTC are built by native/build-linux.sh.
+            // NaiveProxy is excluded through the full-only source set below.
+            // Do not use a per-flavour packaging block: its implicit receiver can
+            // resolve to android and exclude the library from every flavour.
+            // NativePlugin.binary() returns null for an unavailable helper.
         }
     }
 
@@ -256,7 +220,7 @@ androidComponents {
     onVariants { variant ->
         val digit = singleAbi?.let { abiVersionDigits.getValue(it) } ?: return@onVariants
         variant.outputs.forEach { output ->
-            output.versionCode.set(36 * 10 + digit)
+            output.versionCode.set(37 * 10 + digit)
         }
     }
 }

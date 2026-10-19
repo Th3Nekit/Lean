@@ -49,6 +49,7 @@ sealed interface ConnCheckState {
     data class Torn(val kb: Int) : ConnCheckState
     data object Timeout : ConnCheckState
     data object Offline : ConnCheckState
+    data object Unverified : ConnCheckState
 }
 
 /**
@@ -208,19 +209,12 @@ class HomeViewModel : ViewModel() {
 
     private var pingJob: Job? = null
 
-    /**
-     * Says out loud when the measurement shown is not the one that was asked for.
-     *
-     * «URL Test» is the only probe that answers "does this node actually carry traffic".
-     * When it cannot run, the number that appears comes from a plain TCP connect, which
-     * succeeds against almost any open port, so a list of dead nodes reads as brisk and
-     * green unless the substitution is stated.
-     */
+    /** Reports unavailable protocol checks without presenting TCP as HTTP success. */
     private fun reportSubstitutions() {
         val count = PingState.substituted.value
         if (count <= 0) return
         CoreManager.appendLog(
-            tr("⚠ URL Test не запустился для %d серверов — там показан обычный TCP-пинг, он не проверяет, что узел реально работает")
+            tr("HTTP-проверка недоступна для %d серверов. Работа этих узлов не подтверждена.")
                 .format(count),
         )
     }
@@ -241,6 +235,33 @@ class HomeViewModel : ViewModel() {
 
 
     private var connCheckJob: Job? = null
+    private data class ConnectionRoute(
+        val vpnState: VpnState,
+        val selectedId: String?,
+        val selectors: List<Pair<String, String>>,
+        val pingUrl: String,
+    )
+    private var connCheckRoute: ConnectionRoute? = null
+
+    private fun connectionRoute() = ConnectionRoute(
+        CoreManager.state.value,
+        app.settings.state.value.selectedProfileId,
+        CoreManager.groups.value.map { it.tag to it.selected },
+        app.settings.state.value.pingUrl,
+    )
+
+    init {
+        viewModelScope.launch {
+            combine(state, app.settings.flow, CoreManager.groups) { _, _, _ -> Unit }
+                .collect {
+                    if (connCheckRoute?.let { it != connectionRoute() } == true) {
+                        connCheckJob?.cancel()
+                        connCheckRoute = null
+                        _connCheck.value = ConnCheckState.Idle
+                    }
+                }
+        }
+    }
 
     // No init ping: the launch-time ping is fired once by MainActivity (gated by
     // pingOnLaunch, batched into a single store write). The VM reads the same
@@ -296,7 +317,7 @@ class HomeViewModel : ViewModel() {
                         val p = byId.getValue(id)
                         Pinger.measure(
                             p.outbound.server, p.outbound.serverPort, s.pingProtocol, s.pingTimeoutMs, s.pingUrl,
-                            udpService = Pinger.isUdpService(p.outbound), protect = CoreManager.probeProtect,
+                            udpService = Pinger.isUdpService(p.outbound), protect = CoreManager.probeProtect, resolve = CoreManager.probeResolve,
                             outbound = p.outbound, urlTestProbe = UrlTestPinger::measure,
                         )
                         }
@@ -351,7 +372,7 @@ class HomeViewModel : ViewModel() {
                         val p = byId.getValue(id)
                         Pinger.measure(
                             p.outbound.server, p.outbound.serverPort, s.pingProtocol, s.pingTimeoutMs, s.pingUrl,
-                            udpService = Pinger.isUdpService(p.outbound), protect = CoreManager.probeProtect,
+                            udpService = Pinger.isUdpService(p.outbound), protect = CoreManager.probeProtect, resolve = CoreManager.probeResolve,
                             outbound = p.outbound, urlTestProbe = UrlTestPinger::measure,
                         )
                         }
@@ -397,7 +418,7 @@ class HomeViewModel : ViewModel() {
                         val p = byId.getValue(id)
                         Pinger.measure(
                             p.outbound.server, p.outbound.serverPort, s.pingProtocol, s.pingTimeoutMs, s.pingUrl,
-                            udpService = Pinger.isUdpService(p.outbound), protect = CoreManager.probeProtect,
+                            udpService = Pinger.isUdpService(p.outbound), protect = CoreManager.probeProtect, resolve = CoreManager.probeResolve,
                             outbound = p.outbound, urlTestProbe = UrlTestPinger::measure,
                         )
                         }
@@ -427,7 +448,7 @@ class HomeViewModel : ViewModel() {
             val s = app.settings.flow.first()
             val ms = Pinger.measure(
                 profile.outbound.server, profile.outbound.serverPort, s.pingProtocol, s.pingTimeoutMs, s.pingUrl,
-                udpService = Pinger.isUdpService(profile.outbound), protect = CoreManager.probeProtect,
+                udpService = Pinger.isUdpService(profile.outbound), protect = CoreManager.probeProtect, resolve = CoreManager.probeResolve,
                 outbound = profile.outbound, urlTestProbe = UrlTestPinger::measure,
             )
             app.profiles.updateLatency(profile.id, ms)
@@ -444,15 +465,33 @@ class HomeViewModel : ViewModel() {
      */
     fun checkConnection() {
         connCheckJob?.cancel()
+        val route = connectionRoute()
+        connCheckRoute = route
         connCheckJob = viewModelScope.launch {
+            if (route.vpnState == VpnState.Connecting || route.vpnState == VpnState.Stopping) {
+                _connCheck.value = ConnCheckState.Unverified
+                delay(5_000)
+                _connCheck.value = ConnCheckState.Idle
+                return@launch
+            }
             _connCheck.value = ConnCheckState.Checking
             val s = app.settings.flow.first()
+            if (route != connectionRoute()) return@launch
             // Fixed, independent budget for the end-to-end check, not
             // s.pingTimeoutMs: that knob tunes per-server ICMP/TCP probes (where a
             // user may set 10s for slow ICMP, or 1500ms for snappy sorting) and
             // letting it drive the Home button would either stall it for 10s or
             // time out a healthy-but-slow tunnel at 1500ms.
-            val result = ConnectionChecker.check(s.pingUrl, CONN_CHECK_TIMEOUT_MS)
+            val connection = if (route.vpnState is VpnState.Connected) {
+                CoreManager.tunnelConnectionFactory(app)
+            } else {
+                { url: java.net.URL -> url.openConnection() as java.net.HttpURLConnection }
+            }
+            val result = ConnectionChecker.check(s.pingUrl, CONN_CHECK_TIMEOUT_MS, connection)
+            if (route != connectionRoute()) {
+                _connCheck.value = ConnCheckState.Idle
+                return@launch
+            }
             when (result) {
                 is ConnectionChecker.CheckResult.Timeout -> _connCheck.value = ConnCheckState.Timeout
                 is ConnectionChecker.CheckResult.NoInternet -> _connCheck.value = ConnCheckState.Offline
@@ -460,14 +499,19 @@ class HomeViewModel : ViewModel() {
                     // Reachable, now force real data flow to see if it survives past the
                     // ~16 KB TSPU cliff (a single generate_204 never trips it).
                     _connCheck.value = ConnCheckState.Stressing
-                    _connCheck.value = when (val sust = ConnectionChecker.sustainedCheck()) {
+                    val sustained = ConnectionChecker.sustainedCheck(openConnection = connection)
+                    if (route != connectionRoute()) {
+                        _connCheck.value = ConnCheckState.Idle
+                        return@launch
+                    }
+                    _connCheck.value = when (val sust = sustained) {
                         is ConnectionChecker.SustainedResult.Survived ->
                             ConnCheckState.Survived(result.ms, sust.kbps)
                         is ConnectionChecker.SustainedResult.Torn ->
                             ConnCheckState.Torn(sust.bytes / 1024)
                         // Reachable but the sized endpoint didn't answer (e.g. blocked),
-                        // fall back to the plain reachable result rather than a false "torn".
-                        ConnectionChecker.SustainedResult.Failed -> ConnCheckState.Ok(result.ms)
+                        // A tiny reply does not prove that a data transfer works.
+                        ConnectionChecker.SustainedResult.Failed -> ConnCheckState.Unverified
                     }
                 }
             }

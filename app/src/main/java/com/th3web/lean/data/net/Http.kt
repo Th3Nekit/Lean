@@ -135,7 +135,20 @@ object Http {
                     currentUrl = URL(URL(currentUrl), location).toString() // resolve relative Location
                     continue
                 }
-                if (code !in 200..299) error("HTTP $code")
+                if (code !in 200..299) {
+                    val errorBody = conn.errorStream?.use { input ->
+                        val bytes = ByteArray(4096)
+                        var total = 0
+                        while (total < bytes.size) {
+                            val count = input.read(bytes, total, bytes.size - total)
+                            if (count <= 0) break
+                            total += count
+                        }
+                        String(bytes, 0, total, Charsets.UTF_8)
+                    }.orEmpty()
+                    if (SubscriptionHwidRequired.isRejectionBody(errorBody)) throw SubscriptionHwidRequired()
+                    error("HTTP $code")
+                }
                 // Byte-safe read: strict UTF-8 first; on failure fall back to ISO-8859-1,
                 // which maps bytes 1:1 to chars, reversible via toByteArray(ISO_8859_1),
                 // so binary bodies (e.g. "gzip:" subscription payloads) survive losslessly.

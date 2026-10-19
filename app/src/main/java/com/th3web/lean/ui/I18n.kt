@@ -21,6 +21,11 @@ object I18n {
 fun tr(ru: String): String = I18n.tr(ru)
 
 internal val EN: Map<String, String> = mapOf(
+    "HTTP-проверка недоступна для %d серверов. Работа этих узлов не подтверждена." to "HTTP checking is unavailable for %d servers. These nodes have not been verified.",
+    "↻ повтор подключения после неудачной проверки" to "↻ retrying the connection after a failed check",
+    "✖ попытки восстановления закончились — выберите сервер вручную" to "✖ recovery attempts exhausted — select a server manually",
+    "Сервер подписки «%s» отклонил запрос" to "Subscription server «%s» rejected the request",
+    "Некоторые панели требуют идентификатор устройства. Отправка HWID передаст серверу подписки идентификатор этого устройства, модель телефона и версию Android. Если лимит устройств исчерпан или приложение не разрешено провайдером, обратитесь к нему." to "Some panels require a device identifier. Sending HWID shares this device’s identifier, phone model and Android version with the subscription server. If the device limit is reached or your provider does not allow this app, contact the provider.",
     "Отправить" to "Send",
     "Отправка…" to "Sending…",
     "Диагностика отправлена" to "Diagnostics sent",
